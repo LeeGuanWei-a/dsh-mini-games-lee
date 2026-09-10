@@ -1,6 +1,6 @@
-# dsh-mini-games bundle patch: inserts this plugin's row into a profile's
+# dsh-mini-games-lee bundle patch: inserts this plugin's row into a profile's
 # layer stack. Installed with:
-#   dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games
+#   dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
 - insert:
-    - id: dsh-mini-games
-      name: 'dsh-mini-games'
+    - id: dsh-mini-games-lee
+      name: 'dsh-mini-games-lee'

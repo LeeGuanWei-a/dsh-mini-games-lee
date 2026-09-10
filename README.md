@@ -1,4 +1,4 @@
-# 🎮 dsh-mini-games — DeepSeek Harness 小游戏合集
+# 🎮 dsh-mini-games-lee — DeepSeek Harness 小游戏合集
 
 在 **DeepSeek Harness Web GUI** 上运行的小游戏合集：一个毛玻璃悬浮窗，内含 **4 个游戏**，可随时切换、拖动、收起。
 
@@ -31,15 +31,15 @@
 仓库根目录即 npm 包，`lib/` 已构建并提交，可直接从 GitHub 安装：
 
 ```sh
-dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games
+dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
 ```
 
 安装时包内 `dsh.bundle.patch`（`cordis.patch.yml`）会把插件行自动插入 profile 层叠：
 
 ```yaml
 - insert:
-    - id: dsh-mini-games
-      name: 'dsh-mini-games'
+    - id: dsh-mini-games-lee
+      name: 'dsh-mini-games-lee'
 ```
 
 重启 Web 后：页面中央出现小游戏窗口；会话头部右侧工具区出现 🎮 入口（用来重新打开）。
@@ -47,8 +47,8 @@ dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games
 **升级 / 回滚**：
 
 ```sh
-dsh plugin --profile web remove dsh-mini-games
-dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games
+dsh plugin --profile web remove dsh-mini-games-lee
+dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
 ```
 
 ## 🎮 操作
@@ -73,7 +73,7 @@ dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games
 ## 📦 仓库结构
 
 ```
-dsh-mini-games/
+dsh-mini-games-lee/
 ├── package.json            # npm 包：dsh.bundle.patch + dsh.client 元数据 + exports
 ├── cordis.patch.yml        # 自注册插件行（安装自动插入 profile）
 ├── src/
