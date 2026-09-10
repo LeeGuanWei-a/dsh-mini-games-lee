@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+*.tgz
+*.tsbuildinfo
+
+# build/test scratch
+.tmp/
+.npm-cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.idea/
+.vscode/
