@@ -45,6 +45,7 @@
   "files": [
     "dist",
     "cordis-plugin.code.txt",
+    "cordis.patch.yml",
     "README.md",
     "LICENSE"
   ],

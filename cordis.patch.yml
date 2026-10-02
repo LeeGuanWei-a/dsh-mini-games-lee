@@ -1,6 +1,12 @@
-# dsh-mini-games-lee bundle patch: inserts this plugin's row into a profile's
-# layer stack. Installed with:
-#   dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
-- insert:
-    - id: dsh-mini-games-lee
-      name: 'dsh-mini-games-lee'
+# dsh-mini-games-lee — bundle patch for DSH 0.2.0-rc.2+
+#
+# This file exists ONLY so DSH's package validator (`loadProfileDirectory`
+# → `loadOverlayPatches`) finds a real overlay when `pnpm add`-ing the
+# package. `dsh.bundle.patch` is a required field and the path must resolve
+# to a parseable top-level YAML array; the empty array below satisfies the
+# validator and inserts nothing into the profile layer stack.
+#
+# In DSH 0.2.0-rc.2 the actual plugin row is registered via the model-driven
+# `cordis_define` tool (see `dist/cordis-plugin.code.txt`), not through the
+# layer-stack insert mechanism this file used to drive on DSH 0.1.x.
+[]

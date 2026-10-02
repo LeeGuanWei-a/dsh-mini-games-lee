@@ -26,6 +26,8 @@
 
 > ⚠️ v0.2.0-rc.2 改用 `cordis_define` 动态 plugin 模型（旧的 `exports["./client"]` + `cordis.patch.yml` bundle 注册机制已被弃用）。本仓库现在提供 `dist/cordis-plugin.code.txt`（可直接粘贴进 `cordis_define` 工具调用），桌面端与 Web 端都能用 —— 二者共用 dsh-web-app 的 `__DSH_BOOT__` 注入链路。
 
+> 🔧 **为什么还保留 `cordis.patch.yml` 和 `dsh.bundle.patch`**：DSH 0.2.0-rc.2 的 `loadProfileDirectory` 在 `pnpm add` 时**强制**读取 `dsh.bundle.patch` 指向的文件（缺失就抛 ENOENT）。本仓库把 `cordis.patch.yml` 内容改为空数组 `[]`，通过验证但不向 profile layer stack 插入任何东西；实际 plugin 行通过 `cordis_define` 注册。
+
 ## 🚀 安装（DSH 0.2.0-rc.2+）
 
 1. **构建 cordis 载荷**：
@@ -59,10 +61,21 @@
 
    首次加载会弹出 client approval；批准后页面中央出现小游戏窗口，会话头部右侧工具区出现 🎮 入口。
 
+   c. **PNPM / NPM 安装**（**仅是占位** —— 真要用仍需走 `cordis_define`）：
+
+   ```sh
+   pnpm add github:LeeGuanWei-a/dsh-mini-games-lee
+   # 或本地：pnpm add F:\Projects\dsh-mini-games-lee
+   ```
+
+   安装会被 DSH 接受（`cordis.patch.yml` 是合法的空 patch list），但**不会自动挂载** —— 你仍需在 DSH 里跑一次 `cordis_define` 触发 client 半区加载。
+
 3. **回滚**：
 
    ```sh
    cordis_undefine({ pluginId: "minig.<id>" })
+   # 卸载 npm 安装：
+   pnpm remove dsh-mini-games-lee
    ```
 
 ## 🎮 操作
