@@ -64,7 +64,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
-    "esbuild": "^0.28.2",
     "happy-dom": "^15.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

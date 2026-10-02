@@ -139,8 +139,9 @@ dsh-mini-games-lee/
 │   ├── cordis-plugin.code.txt
 │   └── cordis-plugin.js
 └── scripts/
-    ├── build-cordis.mjs    # src → cordis_define 文本（esbuild）
-    ├── smoke-cordis.mjs    # happy-dom 闭包烟测
+    ├── inline.mjs          # 【关键】模块顺序 + import/export 剥离，唯一的平铺作用域权威
+    ├── build-cordis.mjs    # inline.mjs 扁平体 → cordis_define 产物
+    ├── smoke-cordis.mjs    # 真实 React 渲染烟测（断言不抛错 + slot 注册）
     ├── dev-cordis.mjs      # 浏览器 visual smoke
     ├── build-lib.mjs       # 归档（旧的 src → lib 内联打包）
     ├── smoke.mjs           # 旧 store 模型断言（保留）
@@ -164,7 +165,8 @@ dsh-mini-games-lee/
    ```
 
 2. 在 `src/client.js` 的 `GAMES` 数组里加入它；
-3. `npm run build:cordis` 重新生成 `dist/` 并粘贴进 `cordis_define`。
+3. 在 `scripts/inline.mjs` 的 `MODULES` 里把新文件加在 `src/client.js` **之前**（顺序 = 扁平作用域里的依赖顺序）；
+4. `npm run check` 校验，然后 `npm run build:cordis` 重新生成 `dist/` 并粘贴进 `cordis_define`。
 
 ## 🏆 排行榜说明
 
@@ -181,9 +183,11 @@ npm install
 npm run check       # build:cordis + smoke:cordis + smoke + render-check
 ```
 
-- `npm run build:cordis` —— esbuild 把 `src/client.js` 与 `src/shared/*`、`src/games/*` 打包成 cordis_define 用的 client 半区
-- `npm run smoke:cordis` —— 用 happy-dom + 真实 dsh `cordis-client-runner` 闭包签名执行 client 半区，断言两个 slot 都被注册
+- `npm run build:cordis` —— 把 `scripts/inline.mjs` 列出的 9 个模块按依赖顺序拼成**单一扁平作用域**，再包成 cordis_define 用的 client 半区（`React` 由 dsh 闭包的第一个参数提供，无需 shim）
+- `npm run smoke:cordis` —— 用 real React + `react-dom/server` **真实渲染**每个注册的组件，断言不抛错且两个 slot 都在。这条能抓住"能注册但一渲染就崩"的故障（例如 `el is not defined`）
 - `npm run dev:cordis` —— 起一个本地 dev server，浏览器加载 client 半区代码，模拟 dsh 渲染，肉眼确认 4 个游戏都可玩
+
+> ⚠️ **不要把这些源码交给 esbuild 之类的 ESM 打包器**。`src/` 是"扁平共享作用域"写法：模块之间互相引用 `el`、`useStore`、`THEMES` 等声明而**不写 import**，模块顺序由 `scripts/inline.mjs` 的 `MODULES` 决定。真 ESM 打包会给每个模块单独作用域，于是 `useStore is not defined`；而且 esbuild 会把 `el` 改名成 `el2` 却漏改其它模块里的 `el(...)` 调用点，于是 `el is not defined`。两个故障都实测出现过。新增/移动模块时改 `MODULES` 顺序即可。
 
 ## 📄 许可证
 
