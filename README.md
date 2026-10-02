@@ -15,41 +15,55 @@
 - **每个游戏独立排行榜**（最近 10 局，localStorage 持久化、可清空）
 - 键盘全局操作（打开期间无需点击窗口），同时提供屏幕按钮，输入框打字不受影响
 
-## ✅ 运行环境（版本标识）
+## ✅ 运行环境（DSH 版本标识）
 
 | 组件 | 版本 |
 |---|---|
-| `@deepseek-ai/dsh`（Harness CLI / Web GUI） | **`0.1.2-rc.1`**（开发与实测版本） |
-| Web GUI 地址 | `http://127.0.0.1:3080` |
+| `@deepseek-ai/dsh-desktop-runtime`（DeepSeek Harness Desktop） | **`0.2.0-rc.2`**（已实测） |
+| `@deepseek-ai/dsh`（Harness CLI / Web GUI） | **`0.2.0-rc.2`**（已实测） |
 | 宿主接口依赖 | `shell.overlay`、`conversation.session.header.utilities`、`timer`（`inject: ['timer']`） |
-| 插件形态 | Host-resident Client Plugin（node 半区空 apply + 浏览器半区 `./client`） |
+| 插件形态 | **`cordis_define` 动态 Plugin**（模型 / 用户 / panel 触发均可） |
 
-> ⚠️ `dsh.client` 元数据、`window.__ModuleLoader__.load` 浏览器产物与宿主 roster 扫描机制**绑定本版本 harness**。换版本装配前请核对插槽名与 `timer` 契约。
+> ⚠️ v0.2.0-rc.2 改用 `cordis_define` 动态 plugin 模型（旧的 `exports["./client"]` + `cordis.patch.yml` bundle 注册机制已被弃用）。本仓库现在提供 `dist/cordis-plugin.code.txt`（可直接粘贴进 `cordis_define` 工具调用），桌面端与 Web 端都能用 —— 二者共用 dsh-web-app 的 `__DSH_BOOT__` 注入链路。
 
-## 🚀 安装（一条命令）
+## 🚀 安装（DSH 0.2.0-rc.2+）
 
-仓库根目录即 npm 包，`lib/` 已构建并提交，可直接从 GitHub 安装：
+1. **构建 cordis 载荷**：
 
-```sh
-dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
-```
+   ```sh
+   npm install
+   npm run build:cordis
+   ```
 
-安装时包内 `dsh.bundle.patch`（`cordis.patch.yml`）会把插件行自动插入 profile 层叠：
+   生成：
+   - `dist/cordis-plugin.code.txt` —— 人读可粘贴进 `cordis_define` 工具的 `code.host` / `code.client`
+   - `dist/cordis-plugin.js` —— CommonJS 导出 (`{ host, client }`)
 
-```yaml
-- insert:
-    - id: dsh-mini-games-lee
-      name: 'dsh-mini-games-lee'
-```
+2. **加载到 DSH**（任选其一）：
 
-重启 Web 后：页面中央出现小游戏窗口；会话头部右侧工具区出现 🎮 入口（用来重新打开）。
+   a. **present 文件**：把 `dist/cordis-plugin.code.txt` 拖到 DeepSeek Harness Web GUI，让模型用 `present` 工具读它，然后请模型 `cordis_define` 加载。
 
-**升级 / 回滚**：
+   b. **手动 cordis_define**：在 DSH 任意会话里，让模型执行：
 
-```sh
-dsh plugin --profile web remove dsh-mini-games-lee
-dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
-```
+   ```json
+   cordis_define({
+     "name": "小游戏合集",
+     "purpose": "DSH 毛玻璃悬浮小游戏合集：俄罗斯方块 / 贪吃蛇 / 2048 / 扫雷",
+     "plugin": { "kind": "new", "idPrefix": "minig" },
+     "code": {
+       "host": "<<<见 cordis-plugin.code.txt 的 <<<HOST>>> 段>>>",
+       "client": "<<<见 cordis-plugin.code.txt 的 <<<CLIENT>>> 段>>>"
+     }
+   })
+   ```
+
+   首次加载会弹出 client approval；批准后页面中央出现小游戏窗口，会话头部右侧工具区出现 🎮 入口。
+
+3. **回滚**：
+
+   ```sh
+   cordis_undefine({ pluginId: "minig.<id>" })
+   ```
 
 ## 🎮 操作
 
@@ -93,8 +107,8 @@ dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
 
 ```
 dsh-mini-games-lee/
-├── package.json            # npm 包：dsh.bundle.patch + dsh.client 元数据 + exports
-├── cordis.patch.yml        # 自注册插件行（安装自动插入 profile）
+├── package.json            # npm 包：cordis_define 产物 + cordis.patch.yml (归档)
+├── cordis.patch.yml        # 归档（DSH 0.1.x bundle patch 模型，本版本不再走它）
 ├── src/
 │   ├── index.js            # node 半区：空 apply（纯 UI 插件）
 │   ├── client.js           # 浏览器半区入口：游戏注册表 + apply
@@ -108,30 +122,36 @@ dsh-mini-games-lee/
 │       ├── snake.js        # 🐍 贪吃蛇
 │       ├── g2048.js        # 🔢 2048
 │       └── minesweeper.js  # 💣 扫雷
-├── lib/                    # 已构建产物（提交在仓库，克隆即装）
-│   ├── index.js
-│   └── client.js           # 全部模块内联 + ModuleLoader 注册形态
-└── scripts/build-lib.mjs   # src → lib 内联打包（改源码后 npm run build）
+├── dist/                   # cordis_define 产物（`npm run build:cordis` 生成）
+│   ├── cordis-plugin.code.txt
+│   └── cordis-plugin.js
+└── scripts/
+    ├── build-cordis.mjs    # src → cordis_define 文本（esbuild）
+    ├── smoke-cordis.mjs    # happy-dom 闭包烟测
+    ├── dev-cordis.mjs      # 浏览器 visual smoke
+    ├── build-lib.mjs       # 归档（旧的 src → lib 内联打包）
+    ├── smoke.mjs           # 旧 store 模型断言（保留）
+    ├── render-check.mjs    # 旧 React DOM 渲染检查（保留）
+    └── ...
 ```
 
 ### 加一个新游戏
 
 1. 在 `src/games/` 新建模块，导出一个游戏对象：
 
-```js
-export const MYGAME = (() => {
-  function View(props) {           // props: { ctx, th, active, onGameOver, onOpenRank }
-    // 用 el(...) 渲染；props.th 提供当前主题色；
-    // props.active 为 false 时不要跑时钟/键盘；
-    // 一局结束时调用一次 onGameOver({ value: 分数, meta: '说明文字' })
-  }
-  return { id: 'mygame', title: '我的游戏', icon: '🎯', short: '短名', scoreOrder: 'desc', View }
-})()
-```
+   ```js
+   export const MYGAME = (() => {
+     function View(props) {           // props: { ctx, th, active, onGameOver, onOpenRank }
+       // 用 el(...) 渲染；props.th 提供当前主题色；
+       // props.active 为 false 时不要跑时钟/键盘；
+       // 一局结束时调用一次 onGameOver({ value: 分数, meta: '说明文字' })
+     }
+     return { id: 'mygame', title: '我的游戏', icon: '🎯', short: '短名', scoreOrder: 'desc', View }
+   })()
+   ```
 
 2. 在 `src/client.js` 的 `GAMES` 数组里加入它；
-3. 把新文件加到 `scripts/build-lib.mjs` 的 `MODULES` 列表（放在 `client.js` 之前）；
-4. `npm run build` 重新生成 `lib/`（记得提交）。
+3. `npm run build:cordis` 重新生成 `dist/` 并粘贴进 `cordis_define`。
 
 ## 🏆 排行榜说明
 
@@ -140,6 +160,17 @@ export const MYGAME = (() => {
 - 排序：多数游戏按分数降序，扫雷按用时升序；
 - 数据保存在**本机浏览器** localStorage，清站点数据 / 无痕 / 换浏览器会丢；
 - 排行榜视图内可两次点击清空当前游戏的记录。
+
+## 🛠️ 本地校验（无需宿主）
+
+```sh
+npm install
+npm run check       # build:cordis + smoke:cordis + smoke + render-check
+```
+
+- `npm run build:cordis` —— esbuild 把 `src/client.js` 与 `src/shared/*`、`src/games/*` 打包成 cordis_define 用的 client 半区
+- `npm run smoke:cordis` —— 用 happy-dom + 真实 dsh `cordis-client-runner` 闭包签名执行 client 半区，断言两个 slot 都被注册
+- `npm run dev:cordis` —— 起一个本地 dev server，浏览器加载 client 半区代码，模拟 dsh 渲染，肉眼确认 4 个游戏都可玩
 
 ## 📄 许可证
 

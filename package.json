@@ -1,9 +1,9 @@
 {
   "name": "dsh-mini-games-lee",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Mini-games collection for the DeepSeek Harness Web GUI — one draggable frosted-glass window with Tetris, Snake, 2048 and Minesweeper, light/dark themes and per-game local leaderboards. · DeepSeek Harness Web 端小游戏合集：俄罗斯方块 / 贪吃蛇 / 2048 / 扫雷，毛玻璃悬浮窗、深浅色主题、各游戏独立排行榜。",
   "type": "module",
-  "main": "lib/index.js",
+  "main": "dist/cordis-plugin.js",
   "license": "MIT",
   "keywords": [
     "deepseek",
@@ -16,7 +16,8 @@
     "tetris",
     "snake",
     "2048",
-    "minesweeper"
+    "minesweeper",
+    "cordis_define"
   ],
   "repository": {
     "type": "git",
@@ -33,25 +34,28 @@
   },
   "exports": {
     ".": {
-      "default": "./lib/index.js"
+      "default": "./dist/cordis-plugin.js"
     },
     "./client": {
-      "default": "./lib/client.js"
+      "default": "./dist/cordis-plugin.code.txt"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib",
-    "cordis.patch.yml",
+    "dist",
+    "cordis-plugin.code.txt",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
     "build": "node scripts/build-lib.mjs",
+    "build:cordis": "node scripts/build-cordis.mjs",
+    "dev:cordis": "node scripts/dev-cordis.mjs",
     "smoke": "node scripts/smoke.mjs",
+    "smoke:cordis": "node scripts/smoke-cordis.mjs",
     "render-check": "node scripts/render-check.mjs",
-    "check": "npm run build && npm run smoke && npm run render-check"
+    "check": "npm run build:cordis && npm run smoke:cordis && npm run smoke && npm run render-check"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
@@ -59,6 +63,8 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
+    "esbuild": "^0.28.2",
+    "happy-dom": "^15.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   }
