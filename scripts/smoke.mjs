@@ -20,7 +20,7 @@ const ok = (msg) => console.log('ok - ' + msg)
 // Slots this plugin must occupy. Kept in one place so the assertion and the
 // message can never disagree.
 const EXPECTED = [
-  { name: 'sidebar.footer.action', id: 'minigames-launch' },
+  { name: 'conversation.session.header.utilities', id: 'minigames-launch' },
   { name: 'shell.overlay', id: 'minigames-window' }
 ]
 

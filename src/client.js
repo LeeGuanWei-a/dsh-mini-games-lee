@@ -23,11 +23,20 @@ export function apply(ctx) {
   if (slots === undefined || timer === undefined) return
   const store = makeStore()
 
-  // The launcher lives in `sidebar.footer.action` — the additive icon strip
-  // rendered beside Settings at the sidebar foot. It is root-scoped, so it is
-  // visible before a Session exists and stays put when the main panel changes.
-  ctx.effect(() => slots.inject('sidebar.footer.action', () => slots.register(
-    { name: 'sidebar.footer.action', id: 'minigames-launch', order: 20, label: '小游戏' },
+  // The launcher sits in the Session header's right-aligned utilities row — the
+  // page's top-right corner. Two things make it the right seat:
+  //   - it is a `list` with replaceRisk "none", so a fresh id is ADDED beside the
+  //     shipped entries (open-in-app, session-log-download) instead of replacing
+  //     one. The sibling `conversation.session.header.corner` is a `single` with
+  //     replaceRisk "shadows-shipped-ui" and is already occupied, so registering
+  //     there would hide a shipped control.
+  //   - `order: 20` sorts it after the shipped entries, at the row's right edge.
+  //
+  // This slot is Session-scoped: on the blank/Hero screen there is no header and
+  // therefore no launcher. The window itself lives in `shell.overlay`, which is
+  // root-scoped, so a game already open stays open across that transition.
+  ctx.effect(() => slots.inject('conversation.session.header.utilities', () => slots.register(
+    { name: 'conversation.session.header.utilities', id: 'minigames-launch', order: 20, label: '小游戏' },
     () => el(LaunchButton, { store })
   )))
 

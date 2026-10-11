@@ -22,7 +22,7 @@
 | `@deepseek-ai/dsh`（Harness CLI / Web GUI） | **`0.2.0-rc.2`**（已实测） |
 | 插件形态 | **profile bundle**（`dsh.bundle.patch` + `dsh.client`），经 `plugin_manager` 安装 |
 | 客户端硬依赖 | `slots`（两个槽位）、`timer`（各游戏时钟） |
-| 占用槽位 | `sidebar.footer.action`、`shell.overlay` |
+| 占用槽位 | `conversation.session.header.utilities`（右上角）、`shell.overlay`（悬浮层） |
 
 ## 🚀 安装
 
@@ -34,7 +34,11 @@
 plugin_manager({ action: "install_bundle", target: "F:\\Projects\\dsh-mini-games-lee" })
 ```
 
-安装后 profile 的 `dsh.profile.bundles` 会登记本包，`cordis.patch.yml` 插入的那一行由 Loader 挂载，浏览器半区通过包清单里的 `dsh.client` 被发现。返回 `application: applied` 且 `warnings` 为空即表示已生效；侧栏底部会出现 🎮，页面中央出现游戏窗口。
+安装后 profile 的 `dsh.profile.bundles` 会登记本包，`cordis.patch.yml` 插入的那一行由 Loader 挂载，浏览器半区通过包清单里的 `dsh.client` 被发现。返回 `application: applied` 且 `warnings` 为空即表示已生效；会话标题栏**右上角**出现 🎮，页面中央出现游戏窗口。
+
+> 📍 **🎮 的位置**：在 `conversation.session.header.utilities`（会话标题栏右对齐工具条，即页面右上角），`order: 20` 排在自带条目之后、贴着右边缘。
+> 这一槽是 **Session 作用域**：空白 Hero 页没有标题栏，也就没有 🎮；但游戏窗口本身在 root 作用域的 `shell.overlay` 里，已经打开的窗口不受影响。
+> 没有选隔壁的 `conversation.session.header.corner`：那是 `single` 且 `replaceRisk: shadows-shipped-ui`，并且已被自带控件占用，注册进去会**顶掉**那个控件。
 
 ### 备用：`cordis_define` 动态插件
 
