@@ -1,25 +1,30 @@
 # dsh-mini-games-lee — bundle patch
 #
-# One row, anchored to this package's own Host half. It mounts dist/index.js as
-# the Host plugin, and `dsh-client-modules` reaches the browser half through this
-# package's manifest — `dsh.client.platform` opts the package in,
-# `exports["./client"]` names the bundle (dist/client.js), and
+# One row: the Loader mounts this package's Host half, and `dsh-client-modules`
+# reaches the browser half through this package's manifest — `dsh.client.platform`
+# opts the package in and `exports["./client"]` names the bundle (dist/client.js);
 # `dsh.client.immediately` activates it at boot instead of waiting for a Session.
 #
-# Why `./dist/index.js` and not the bare name `dsh-mini-games-lee`:
-# a relative path is anchored beside this patch file, so the row resolves from
-# the checkout it ships in. The bare name resolves only through the profile's
-# node_modules; installed that way the Loader produced no fiber for the entry and
-# reported "failed to import". The relative form works from either location, and
-# it still hands `dsh-client-modules` the right package.json, because resolving a
-# path-like row name walks up from the resolved file to the nearest manifest —
-# which is this one.
+# The name is the BARE PACKAGE NAME, not a relative path, and that matters twice:
 #
-# This file used to be an empty `[]`, which passed the profile validator while
-# registering nothing: the plugin could only be reached by pasting
-# dist/cordis-plugin.code.txt into the model-driven `cordis_define` tool, and
-# `install_bundle` mounted an inert package.
+#  1. Resolution. A bundle patch's inserted rows resolve against the bundle's own
+#     directory, not the profile. From `node_modules/dsh-mini-games-lee/` the
+#     package name resolves one level up. It fails only under a `link:`/local-path
+#     install, where the directory is a junction that Node resolves to its real
+#     location outside any `node_modules` — so install from a git/registry spec
+#     (a real copy, the way @deepseek-ai bundles do), not from a local path.
+#
+#  2. Display metadata. `readPluginMeta` in @deepseek-ai/dsh-app-boot opens with
+#     `if (barePackageName(specifier) === void 0) return void 0`, so a row named by
+#     path gets NO metadata at all: the Plugin Manager falls back to printing the
+#     resolved module URL as the component label, and this package's icon and
+#     locale/*.json title and description are never read. The bare name is the
+#     precondition for all of them.
+#
+# This file was previously an empty `[]`, which passed the profile validator while
+# registering nothing: the plugin was reachable only by pasting
+# dist/cordis-plugin.code.txt into the model-driven `cordis_define` tool.
 
 - insert:
     - id: dsh-mini-games-lee
-      name: ./dist/index.js
+      name: dsh-mini-games-lee

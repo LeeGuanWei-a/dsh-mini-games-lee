@@ -28,11 +28,19 @@
 
 ### 推荐：作为 bundle 安装（重启后仍在）
 
-让 Harness 里的模型执行一次：
+用 **git 规格**装（得到真实目录副本）：
 
 ```
-plugin_manager({ action: "install_bundle", target: "F:\\Projects\\dsh-mini-games-lee" })
+plugin_manager({ action: "install_bundle", target: "github:LeeGuanWei-a/dsh-mini-games-lee" })
 ```
+
+或等价的 CLI：
+
+```sh
+dsh plugin --profile web add github:LeeGuanWei-a/dsh-mini-games-lee
+```
+
+> ❗ **不要用本地路径装**（`target: "F:\\Projects\\dsh-mini-games-lee"`）。那会产出 `link:` 依赖，profile 里的目录是个 junction；Node 会把它解析到真实位置，而本包的裸包名行**在真实位置之上解析不到**，Loader 拿不到 fiber，`install_bundle` 报 `failed to import`。git / registry 规格才是受支持的安装方式（`@deepseek-ai` 自带的 bundle 也是这么装的）。
 
 安装后 profile 的 `dsh.profile.bundles` 会登记本包，`cordis.patch.yml` 插入的那一行由 Loader 挂载，浏览器半区通过包清单里的 `dsh.client` 被发现。返回 `application: applied` 且 `warnings` 为空即表示已生效；会话标题栏**右上角**出现 🎮，页面中央出现游戏窗口。
 
@@ -55,7 +63,7 @@ profile 的 dsh.profile.bundles
         │
         ├─ cordis.patch.yml ──► insert 一行
         │                         id:   dsh-mini-games-lee
-        │                         name: ./dist/index.js   ← Host 半区（相对本 patch 文件定位）
+        │                         name: dsh-mini-games-lee   ← 裸包名，必须是裸包名
         │
         └─ package.json 的 dsh.client
                  platform: "web"                  ← 声明这是 web 客户端插件
@@ -67,8 +75,11 @@ profile 的 dsh.profile.bundles
 
 Host 半区 `dist/index.js` 只导出空的 `apply()`：它唯一的职责是让这一行在 Loader 里激活。浏览器半区 `dist/client.js` 才是全部逻辑，以 Client 模块表的 `window.__ModuleLoader__.load({ id, factory })` 形式注册，`React` 由模块表的 `require('react')` 提供。
 
-> ⚠️ **`name` 为什么是 `./dist/index.js` 而不是裸包名 `dsh-mini-games-lee`**
-> 相对路径以 patch 文件为基准定位，跟着 checkout 走；裸包名只能通过 profile 的 `node_modules` 解析。用裸包名安装时 Loader 拿不到 fiber，`install_bundle` 会报 `failed to import`。相对路径两种位置都能用，而且照样能让 `dsh-client-modules` 找到正确的 `package.json` —— 解析路径型行名时会从解析出的文件向上找最近的 manifest，也就是本包自己。
+> ⚠️ **`name` 必须是裸包名 `dsh-mini-games-lee`，不能用相对路径** —— 两件事都靠它：
+>
+> **① 解析。** bundle patch 插入的行以**bundle 自己的目录**为解析基准（`dsh-plugin-manager`：`base = active?.baseUrl ?? pathToFileURL(join(dir, "package.json")).href`），不是 profile。从 `node_modules/dsh-mini-games-lee/` 向上一级就能命中包名。**唯一会失败的情况是 `link:` / 本地路径安装**：那种情况下目录是个 junction，Node 会把它解析到真实位置，而真实位置之上没有任何 `node_modules`。所以要用 **git / registry 规格**安装（得到真实目录副本，`@deepseek-ai` 自带 bundle 也是这么装的），不要用本地路径。
+>
+> **② 显示元数据。** `@deepseek-ai/dsh-app-boot` 的 `readPluginMeta` 第一行就是 `if (barePackageName(specifier) === void 0) return void 0`。行名写成路径 → **元数据整块放弃**：Plugin Manager 退回把解析后的模块 URL 当作组件名打印，本包的 `icon.svg` 和 `locale/*.json` 里的标题/描述**一个都不会被读**。裸包名是这一切的前置条件。
 
 ## 🎮 操作
 
@@ -113,8 +124,11 @@ Host 半区 `dist/index.js` 只导出空的 `apply()`：它唯一的职责是让
 ```
 dsh-mini-games-lee/
 ├── package.json            # bundle 清单：dsh.bundle.patch + dsh.client + exports
-├── cordis.patch.yml        # 插入 Host 行（name: ./dist/index.js）
-├── icon.svg                # Plugin Manager 卡片图标
+├── cordis.patch.yml        # 插入 Host 行（name: dsh-mini-games-lee，裸包名）
+├── icon.svg                # Plugin Manager 卡片图标（package.json 的 icon 字段）
+├── locale/
+│   ├── en.json             # 卡片显示元数据：meta.title / meta.description
+│   └── zh.json             #   语言文件必须叫语言 id（本宿主内置的只有 zh / en）
 ├── src/
 │   ├── index.js            # Host 半区：空 apply（纯 UI 插件）
 │   ├── client.js           # 浏览器半区入口：游戏注册表 + apply
@@ -162,7 +176,7 @@ dsh-mini-games-lee/
 2. 在 `src/client.js` 的 `GAMES` 数组里加入它；
 3. 在 `scripts/inline.mjs` 的 `MODULES` 里把新文件加在 `src/client.js` **之前**（顺序 = 扁平作用域里的依赖顺序）；
 4. `npm run check` 校验，然后 `npm run build` 重新生成 `dist/`；
-5. 重新 `install_bundle`（包以 `link:` 安装，改完 `dist/` 后重装一次，让 Loader 拿到新的模块代）。
+5. 重新装一次（git 规格），让 Loader 拿到新的模块代与 patch。
 
 ## 🏆 排行榜说明
 
