@@ -2,8 +2,8 @@
 //
 // The host loads the browser half in a page we cannot reach from here, so this
 // catches render-time errors (undefined helpers, bad element trees, hook misuse)
-// by building the same inlined module scope as lib/client.js and rendering:
-//   LaunchButton, every game View (dark + light), and the MiniGamesWindow.
+// by building the same inlined module scope that dist/client.js wraps and
+// rendering: LaunchButton, every game View (dark + light), and MiniGamesWindow.
 //
 // Run: npm run render-check
 
@@ -38,7 +38,7 @@ function check(label, fn) {
   }
 }
 
-const ctx = { interval: () => () => {}, get: () => undefined, effect: () => () => {} }
+const timer = { interval: () => () => {} }
 const noop = () => {}
 const store = mod.makeStore()
 
@@ -47,7 +47,7 @@ check('LaunchButton', () => renderToString(createElement(mod.LaunchButton, { sto
 for (const theme of ['dark', 'light']) {
   for (const game of mod.GAMES) {
     check(`${game.id} view [${theme}]`, () => renderToString(createElement(game.View, {
-      ctx,
+      timer,
       th: mod.THEMES[theme],
       store,
       active: true,
@@ -57,7 +57,7 @@ for (const theme of ['dark', 'light']) {
   }
 }
 
-check('MiniGamesWindow', () => renderToString(createElement(mod.MiniGamesWindow, { store, ctx, games: mod.GAMES })))
+check('MiniGamesWindow', () => renderToString(createElement(mod.MiniGamesWindow, { store, timer, games: mod.GAMES })))
 
 console.log(failures ? `\nrender-check: ${failures} FAILED` : '\nrender-check: all views rendered')
 process.exitCode = failures ? 1 : 0

@@ -88,7 +88,7 @@ export const MINESWEEPER = (() => {
   }
 
   function View(props) {
-    const ctx = props.ctx
+    const timer = props.timer
     const th = props.th
     const active = props.active
     const onGameOver = props.onGameOver
@@ -97,7 +97,7 @@ export const MINESWEEPER = (() => {
 
     React.useEffect(() => {
       if (!active || s.phase !== 'playing') return
-      return ctx.interval(() => {
+      return timer.interval(() => {
         setS(st => st.phase === 'playing' ? Object.assign({}, st, { elapsed: st.elapsed + 1 }) : st)
       }, 1000)
     }, [active, s.phase])

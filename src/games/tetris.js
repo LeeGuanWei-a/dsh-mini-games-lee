@@ -160,7 +160,7 @@ export const TETRIS = (() => {
   const togglePause = (st) => Object.assign({}, st, { paused: !st.paused })
 
   function View(props) {
-    const ctx = props.ctx
+    const timer = props.timer
     const th = props.th
     const active = props.active
     const onGameOver = props.onGameOver
@@ -170,7 +170,7 @@ export const TETRIS = (() => {
 
     React.useEffect(() => {
       if (!active || v.over || v.paused || !v.piece) return
-      return ctx.interval(() => setS(tick), speedFor(v.level))
+      return timer.interval(() => setS(tick), speedFor(v.level))
     }, [active, v.over, v.paused, v.level])
 
     React.useEffect(() => {

@@ -1,8 +1,11 @@
 // smoke.mjs — offline sanity check for the built browser half.
 //
-// Mocks the two things the host provides at load time (window.__ModuleLoader__
-// and require('react')), then asserts that lib/client.js loads, exports the
-// plugin surface, and registers its slots through apply(ctx).
+// The browser half is the artifact the Client Loader actually mounts, so this
+// test loads dist/client.js exactly the way the page does: a fake
+// `window.__ModuleLoader__` captures the registration, the factory is invoked
+// with a stubbed `require` (react is the only platform module we ask for), and
+// the returned plugin is driven through apply(ctx) with fake slots/timer
+// services. That is the whole load path short of a real browser.
 //
 // Run: node scripts/smoke.mjs
 
@@ -14,13 +17,20 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const fail = (msg) => { console.error('FAIL: ' + msg); process.exitCode = 1 }
 const ok = (msg) => console.log('ok - ' + msg)
 
+// Slots this plugin must occupy. Kept in one place so the assertion and the
+// message can never disagree.
+const EXPECTED = [
+  { name: 'sidebar.footer.action', id: 'minigames-launch' },
+  { name: 'shell.overlay', id: 'minigames-window' }
+]
+
 // ---------------------------------------------------------------- game modules
-const mods = ['tetris', 'snake', 'g2048', 'minesweeper'].map(async (name) => {
+const games = await Promise.all(['tetris', 'snake', 'g2048', 'minesweeper'].map(async (name) => {
   const url = pathToFileURL(join(root, 'src/games', name + '.js')).href
   const m = await import(url)
   const key = Object.keys(m)[0]
   const game = m[key]
-  if (!game) return fail(`${name}: no export`)
+  if (!game) { fail(`${name}: no export`); return null }
   for (const field of ['id', 'title', 'icon', 'scoreOrder', 'View']) {
     if (game[field] === undefined) fail(`${name}: missing ${field}`)
   }
@@ -28,11 +38,10 @@ const mods = ['tetris', 'snake', 'g2048', 'minesweeper'].map(async (name) => {
   if (game.scoreOrder !== 'asc' && game.scoreOrder !== 'desc') fail(`${name}: bad scoreOrder`)
   ok(`game module ${name} -> id=${game.id} order=${game.scoreOrder}`)
   return game
-})
-const games = await Promise.all(mods)
+}))
 
-// ------------------------------------------------------------------ client.js
-const code = readFileSync(join(root, 'lib/client.js'), 'utf8')
+// ---------------------------------------------------------------- dist/client.js
+const code = readFileSync(join(root, 'dist/client.js'), 'utf8')
 let def = null
 const windowMock = { __ModuleLoader__: { load: (d) => { def = d } } }
 const reactStub = { createElement: (type, props, ...kids) => ({ type, props, kids }) }
@@ -41,37 +50,61 @@ const requireMock = (id) => {
   throw new Error('unexpected require: ' + id)
 }
 
-new Function('window', 'require', code)(windowMock, requireMock)
-if (!def) fail('lib/client.js did not call window.__ModuleLoader__.load')
+new Function('window', code)(windowMock)
+if (!def) fail('dist/client.js did not call window.__ModuleLoader__.load')
 else ok(`ModuleLoader registration id=${def.id}`)
+
+if (def && def.id !== 'dsh-mini-games-lee') fail('module id must equal the package name, got ' + def.id)
 
 const exported = def.factory(requireMock)
 if (typeof exported.apply !== 'function') fail('exports.apply missing')
 else ok('exports.apply present')
-if (!Array.isArray(exported.inject) || exported.inject.indexOf('timer') < 0) fail('exports.inject should include timer')
-else ok('exports.inject = ' + JSON.stringify(exported.inject))
+for (const dep of ['slots', 'timer']) {
+  if (!Array.isArray(exported.inject) || exported.inject.indexOf(dep) < 0) fail(`exports.inject should include ${dep}`)
+}
+ok('exports.inject = ' + JSON.stringify(exported.inject))
 
 // ------------------------------------------------------------------ apply(ctx)
 const registrations = []
+const disposers = []
 const fakeSlots = {
-  inject: (name, cb) => { cb() },
+  inject: (name, cb) => { cb(); return () => {} },
   register: (options) => { registrations.push(options); return () => {} }
 }
-const ctx = { get: (name) => (name === 'slots' ? fakeSlots : undefined) }
+const fakeTimer = { interval: () => () => {} }
+const ctx = {
+  get: (name) => (name === 'slots' ? fakeSlots : name === 'timer' ? fakeTimer : undefined),
+  effect: (fn) => { const d = fn(); if (typeof d === 'function') disposers.push(d); return () => {} }
+}
 try {
   exported.apply(ctx)
 } catch (err) {
   fail('apply(ctx) threw: ' + (err && err.message))
 }
+
 const names = registrations.map(r => r.name)
-for (const want of ['conversation.session.header.utilities', 'shell.overlay']) {
-  if (names.indexOf(want) < 0) fail('slot not registered: ' + want)
-  else ok('registered slot ' + want)
+for (const want of EXPECTED) {
+  if (names.indexOf(want.name) < 0) { fail('slot not registered: ' + want.name); continue }
+  ok('registered slot ' + want.name)
+  const entry = registrations.filter(r => r.name === want.name)[0]
+  if (entry && entry.id !== want.id) fail(`${want.name} id = ${entry && entry.id}, expected ${want.id}`)
 }
-const overlay = registrations.filter(r => r.name === 'shell.overlay')[0]
-const launcher = registrations.filter(r => r.name === 'conversation.session.header.utilities')[0]
-if (overlay && overlay.id !== 'minigames-window') fail('overlay id = ' + (overlay && overlay.id))
-if (launcher && launcher.id !== 'minigames-launch') fail('launcher id = ' + (launcher && launcher.id))
+if (disposers.length !== EXPECTED.length) {
+  fail(`apply should hand back ${EXPECTED.length} disposers via ctx.effect, got ${disposers.length}`)
+} else ok(`apply registered ${disposers.length} disposable effects`)
+
+// A host without the timer service must stay inert rather than throw.
+const bareRegistrations = []
+try {
+  exported.apply({
+    get: (name) => (name === 'slots' ? { inject: (n, cb) => cb(), register: (o) => { bareRegistrations.push(o); return () => {} } } : undefined),
+    effect: (fn) => { fn(); return () => {} }
+  })
+  if (bareRegistrations.length !== 0) fail('apply registered slots without a timer service')
+  else ok('apply stays inert when the timer service is absent')
+} catch (err) {
+  fail('apply threw without a timer service: ' + (err && err.message))
+}
 
 // games roster count (declared in src/client.js)
 const src = readFileSync(join(root, 'src/client.js'), 'utf8')

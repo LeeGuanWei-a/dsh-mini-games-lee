@@ -9,23 +9,32 @@ import { MINESWEEPER } from './games/minesweeper.js'
 
 const GAMES = [TETRIS, SNAKE, G2048, MINESWEEPER]
 
-export const inject = ['timer']
+// Hard dependencies. `slots` seats our two registrations; `timer` supplies the
+// disposers the game boards run their clocks through.
+export const inject = ['slots', 'timer']
 
 export function apply(ctx) {
+  // `ctx.get(name)` is a lifecycle verb, so it works both under the bundle
+  // Client Loader's own context and under the restricted facade the dynamic
+  // `cordis_define` half receives. Reading `ctx.slots` directly would only
+  // work in the first case.
   const slots = ctx.get('slots')
-  if (slots === undefined) return
+  const timer = ctx.get('timer')
+  if (slots === undefined || timer === undefined) return
   const store = makeStore()
 
-  // Entry sits in the session header's right-aligned utilities row (an icon
-  // strip) rather than the shared sidebar footer row, which other plugins
-  // already crowd.
-  slots.inject('conversation.session.header.utilities', () => slots.register(
-    { name: 'conversation.session.header.utilities', id: 'minigames-launch', order: 20, label: '小游戏' },
+  // The launcher lives in `sidebar.footer.action` — the additive icon strip
+  // rendered beside Settings at the sidebar foot. It is root-scoped, so it is
+  // visible before a Session exists and stays put when the main panel changes.
+  ctx.effect(() => slots.inject('sidebar.footer.action', () => slots.register(
+    { name: 'sidebar.footer.action', id: 'minigames-launch', order: 20, label: '小游戏' },
     () => el(LaunchButton, { store })
-  ))
+  )))
 
-  slots.inject('shell.overlay', () => slots.register(
+  // `shell.overlay` is the frame-wide floating layer above every column, which
+  // is where a draggable game window belongs.
+  ctx.effect(() => slots.inject('shell.overlay', () => slots.register(
     { name: 'shell.overlay', id: 'minigames-window', order: 10, label: '小游戏' },
-    () => el(MiniGamesWindow, { store, ctx, games: GAMES })
-  ))
+    () => el(MiniGamesWindow, { store, games: GAMES, timer })
+  )))
 }

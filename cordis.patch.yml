@@ -1,12 +1,25 @@
-# dsh-mini-games-lee — bundle patch for DSH 0.2.0-rc.2+
+# dsh-mini-games-lee — bundle patch
 #
-# This file exists ONLY so DSH's package validator (`loadProfileDirectory`
-# → `loadOverlayPatches`) finds a real overlay when `pnpm add`-ing the
-# package. `dsh.bundle.patch` is a required field and the path must resolve
-# to a parseable top-level YAML array; the empty array below satisfies the
-# validator and inserts nothing into the profile layer stack.
+# One row, anchored to this package's own Host half. It mounts dist/index.js as
+# the Host plugin, and `dsh-client-modules` reaches the browser half through this
+# package's manifest — `dsh.client.platform` opts the package in,
+# `exports["./client"]` names the bundle (dist/client.js), and
+# `dsh.client.immediately` activates it at boot instead of waiting for a Session.
 #
-# In DSH 0.2.0-rc.2 the actual plugin row is registered via the model-driven
-# `cordis_define` tool (see `dist/cordis-plugin.code.txt`), not through the
-# layer-stack insert mechanism this file used to drive on DSH 0.1.x.
-[]
+# Why `./dist/index.js` and not the bare name `dsh-mini-games-lee`:
+# a relative path is anchored beside this patch file, so the row resolves from
+# the checkout it ships in. The bare name resolves only through the profile's
+# node_modules; installed that way the Loader produced no fiber for the entry and
+# reported "failed to import". The relative form works from either location, and
+# it still hands `dsh-client-modules` the right package.json, because resolving a
+# path-like row name walks up from the resolved file to the nearest manifest —
+# which is this one.
+#
+# This file used to be an empty `[]`, which passed the profile validator while
+# registering nothing: the plugin could only be reached by pasting
+# dist/cordis-plugin.code.txt into the model-driven `cordis_define` tool, and
+# `install_bundle` mounted an inert package.
+
+- insert:
+    - id: dsh-mini-games-lee
+      name: ./dist/index.js

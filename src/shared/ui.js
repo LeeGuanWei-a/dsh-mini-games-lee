@@ -4,8 +4,11 @@
 // A game is a plain object:
 //   { id, title, icon, short, scoreOrder, View, valueLabel }
 // View receives:
-//   { ctx, th, onGameOver(entry), onOpenRank(), active }
-// and must call onGameOver EXACTLY once per finished round with
+//   { timer, th, onGameOver(entry), onOpenRank(), active }
+// `timer` is the resolved harness timer service (ctx.get('timer')): a board
+// starts its clock with `timer.interval(fn, ms)` and returns the disposer from
+// its effect. A host that offers no timer service keeps the plugin inert.
+// A View must call onGameOver EXACTLY once per finished round with
 //   { value: <ranked number>, meta: '<detail text>' }
 export const el = React.createElement
 
@@ -22,7 +25,7 @@ export function btnStyle(th, danger) {
 
 export function MiniGamesWindow(props) {
   const store = props.store
-  const ctx = props.ctx
+  const timer = props.timer
   const games = props.games
   useStore(store)
   const [mini, setMini] = React.useState(false)
@@ -169,7 +172,7 @@ export function MiniGamesWindow(props) {
 
   const view = el(game.View, {
     key: game.id, // remount on switch: each game starts fresh and its timers stop
-    ctx,
+    timer,
     th,
     store,
     active: open && !mini && !showRank,

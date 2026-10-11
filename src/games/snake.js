@@ -66,7 +66,7 @@ export const SNAKE = (() => {
   const togglePause = (st) => Object.assign({}, st, { paused: !st.paused })
 
   function View(props) {
-    const ctx = props.ctx
+    const timer = props.timer
     const th = props.th
     const active = props.active
     const onGameOver = props.onGameOver
@@ -76,7 +76,7 @@ export const SNAKE = (() => {
 
     React.useEffect(() => {
       if (!active || v.over || v.paused) return
-      return ctx.interval(() => setS(step), speedFor(v.eaten))
+      return timer.interval(() => setS(step), speedFor(v.eaten))
     }, [active, v.over, v.paused, v.eaten])
 
     React.useEffect(() => {

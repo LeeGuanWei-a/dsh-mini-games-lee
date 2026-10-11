@@ -1,41 +1,114 @@
 // =============================================================================
-// dsh-mini-games-lee — build the cordis_define payload from the flat-scope src/.
+// dsh-mini-games-lee — one self-contained build for every artifact we ship.
 //
 // The src/ tree is a "shared flat scope": modules reference each other's
 // declarations without importing them. `scripts/inline.mjs` is the single
-// authority on module order + import/export stripping, and it is also what the
-// legacy `lib/` build and `render-check.mjs` consume — so all three can never
-// drift apart.
+// authority on module order + import/export stripping, so every emitter below
+// is guaranteed to agree on what the plugin's single scope contains.
 //
-// This script hands that flat body to the shared emitter, which wraps it as a
-// cordis_define client half (`React` is the dsh closure's first parameter, so
-// no shim is needed) and writes dist/cordis-plugin.{code.txt,js}.
+// Emits (all under dist/):
+//
+//   client.js              the browser half in the module-table form the Client
+//                          Loader consumes for a `dsh.client` package. This is
+//                          what exports["./client"] resolves to, so it is the
+//                          one that matters for `plugin_manager install_bundle`.
+//   cordis-plugin.js       host + client halves as one importable payload
+//                          (`{ host, client }`), kept for the npm-archive story.
+//   cordis-plugin.code.txt the same two halves delimited for pasting into the
+//                          `cordis_define` tool, for harness profiles where
+//                          that dynamic-plugin path is the available one.
+//
+// This file previously imported an emitter from a sibling `asar-extract`
+// checkout that no longer exists, which made `npm run build` fail outright.
+// It no longer has any dependency outside this repository.
 // =============================================================================
 
-import { writeFileSync, mkdirSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { inlineBody, MODULES, packageName } from './inline.mjs'
-import { emitCordisPayload } from '../../asar-extract/build-cordis-lib.mjs'
+import { writeFileSync, readFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { root, MODULES, inlineBody, packageName } from './inline.mjs'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const projectRoot = join(__dirname, '..')
-const scratchDir = join(projectRoot, '.tmp')
-mkdirSync(scratchDir, { recursive: true })
+const NAME = packageName()
+const distDir = join(root, 'dist')
+mkdirSync(distDir, { recursive: true })
 
-// Materialize the flat body for inspection / debugging, then emit.
-const bodyPath = join(scratchDir, 'cordis-client-body.js')
 const body = inlineBody()
-writeFileSync(bodyPath, body, 'utf8')
 
-const result = emitCordisPayload({
-  body,
-  outDir: join(projectRoot, 'dist'),
-  hostBody: 'export function apply() {}',
-})
+// ---------------------------------------------------------------------------
+// 0. dist/index.js — the HOST half.
+//
+// This is what the Loader imports for the row this bundle's patch inserts, so
+// it must export `apply` (or a service class). It is a straight copy of
+// src/index.js: the host half is a pure-UI no-op, and keeping one source file
+// means the two can never disagree.
+//
+// exports["."] pointing at the combined {host, client} payload instead is what
+// made `install_bundle` report "failed to import": that payload is a data
+// artifact for the cordis_define path, not a plugin.
+// ---------------------------------------------------------------------------
+const hostEntry = readFileSync(join(root, 'src/index.js'), 'utf8')
 
-console.log(`build-cordis: ${packageName()} — ${MODULES.length} module(s) inlined`)
-console.log(`build-cordis: flat body at ${bodyPath}`)
-console.log(`build-cordis: wrote ${result.codePath}`)
-console.log(`build-cordis: wrote ${result.payloadPath}`)
-console.log(`build-cordis: host=${result.hostBytes}B, client=${result.clientBytes}B`)
+// ---------------------------------------------------------------------------
+// 1. dist/client.js — `window.__ModuleLoader__.load` bundle.
+//
+// The factory body mirrors what every shipped `@deepseek-ai/dsh-client-ui-*`
+// package emits: declare the module/exports pair, take React from the platform
+// module table, splice in the flat body, then hang `apply` and `inject` off the
+// exports object. The Loader reads exactly those two names.
+// ---------------------------------------------------------------------------
+const clientBundle = `window.__ModuleLoader__.load({
+	id: ${JSON.stringify(NAME)},
+	factory: (require) => {
+		var module = { exports: {} };
+		var exports = module.exports;
+		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+		const React = require("react");
+${body}
+		exports.apply = apply;
+		exports.inject = inject;
+		return module.exports;
+	}
+});
+`
+
+// ---------------------------------------------------------------------------
+// 2. dist/cordis-plugin.js — both halves as one importable payload.
+//
+// A data artifact, not a plugin: it exists so tooling (and this repo's own
+// smoke-cordis check) can reach both halves from one module. Nothing the Loader
+// mounts points here — exports["."] is dist/index.js.
+// ---------------------------------------------------------------------------
+const payload = `// Generated by scripts/build-cordis.mjs — do not edit.
+// Host + Client halves of ${NAME} as a single importable payload.
+export const host = ${JSON.stringify(hostEntry)}
+
+export const client = ${JSON.stringify(clientBundle)}
+`
+
+// ---------------------------------------------------------------------------
+// 3. dist/cordis-plugin.code.txt — delimited text for the `cordis_define` tool.
+// ---------------------------------------------------------------------------
+const codeTxt = `// Generated by scripts/build-cordis.mjs — paste into the \`cordis_define\` tool.
+// HOST code (Node half):
+<<<HOST>>>
+${hostEntry}
+<<<END HOST>>>
+
+// CLIENT code (browser half):
+<<<CLIENT>>>
+// ── flat-scope client body (from the project's own inline.mjs) ──
+${body}
+// ── cordis_define client half export ──
+return { inject, apply }
+<<<END CLIENT>>>
+`
+
+writeFileSync(join(distDir, 'index.js'), hostEntry, 'utf8')
+writeFileSync(join(distDir, 'client.js'), clientBundle, 'utf8')
+writeFileSync(join(distDir, 'cordis-plugin.js'), payload, 'utf8')
+writeFileSync(join(distDir, 'cordis-plugin.code.txt'), codeTxt, 'utf8')
+
+console.log(`build-cordis: ${NAME} — ${MODULES.length} module(s) inlined`)
+console.log(`build-cordis: wrote dist/index.js (${hostEntry.length}B) — the host half the Loader imports`)
+console.log(`build-cordis: wrote dist/client.js (${clientBundle.length}B) — the ./client bundle`)
+console.log(`build-cordis: wrote dist/cordis-plugin.js (${payload.length}B)`)
+console.log(`build-cordis: wrote dist/cordis-plugin.code.txt (${codeTxt.length}B)`)
