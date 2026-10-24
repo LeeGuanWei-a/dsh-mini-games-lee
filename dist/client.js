@@ -17,6 +17,7 @@ const THEMES = {
     boardBorder: 'rgba(148,163,184,.3)',
     cellEmpty: 'rgba(255,255,255,.03)',
     cellLine: 'rgba(148,163,184,.18)',
+    boardBg: 'rgba(30,41,59,.55)',
     btnBg: 'rgba(148,163,184,.14)',
     btnBorder: 'rgba(148,163,184,.42)',
     sub: 'rgba(226,232,240,.68)',
@@ -34,6 +35,7 @@ const THEMES = {
     boardBorder: 'rgba(100,116,139,.32)',
     cellEmpty: 'rgba(15,23,42,.03)',
     cellLine: 'rgba(100,116,139,.25)',
+    boardBg: 'rgba(253,244,215,.6)',
     btnBg: 'rgba(255,255,255,.7)',
     btnBorder: 'rgba(100,116,139,.42)',
     sub: 'rgba(15,23,42,.62)',
@@ -233,15 +235,17 @@ function MiniGamesWindow(props) {
   }, label)
 
   // ── game tabs ────────────────────────────────────────────────────────────
-  const tabs = el('div', { style: { display: 'flex', gap: 4, padding: '6px 8px 0' } },
+  // A fixed 4-column grid keeps seven tabs on two tidy rows inside the 340px
+  // window; a single nowrap flex row used to overflow it once the roster grew.
+  const tabs = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, padding: '6px 8px 0' } },
     games.map(g => el('button', {
       key: g.id,
       onMouseDown: noFocus,
       onClick: () => { setMini(false); store.setGame(g.id) },
       title: g.title,
       style: {
-        cursor: 'pointer', flex: 1, padding: '4px 6px', borderRadius: 6, fontSize: 12,
-        color: 'inherit', whiteSpace: 'nowrap',
+        cursor: 'pointer', padding: '4px 2px', borderRadius: 6, fontSize: 12,
+        color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         border: '1px solid ' + (g.id === game.id ? th.btnBorder : 'transparent'),
         background: g.id === game.id ? th.btnBg : 'transparent',
         opacity: g.id === game.id ? 1 : 0.65
@@ -1248,11 +1252,717 @@ const MINESWEEPER = (() => {
 })()
 
 
+// ── src/games/breakout.js ──
+// 🧱 Breakout — game module for the mini-games framework.
+//
+// DOM-rendered arcade board (no canvas / no requestAnimationFrame): a fixed-step
+// timer moves the ball, the paddle follows held arrow keys, and each cleared
+// level rebuilds the wall with a bonus. Losing all three balls ends the round.
+const BREAKOUT = (() => {
+  const W = 300
+  const H = 200
+  const R = 4
+  const PADDLE_W = 54
+  const PADDLE_H = 8
+  const PADDLE_Y = H - 16
+  const COLS = 7
+  const BRICK_W = 38
+  const BRICK_H = 12
+  const GAP_X = 2
+  const GAP_Y = 4
+  const OFFSET_X = 6
+  const OFFSET_Y = 26
+  const ROW_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6']
+
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+
+  function buildBricks() {
+    const bricks = []
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < COLS; col++) {
+        bricks.push({
+          x: OFFSET_X + col * (BRICK_W + GAP_X),
+          y: OFFSET_Y + row * (BRICK_H + GAP_Y),
+          color: ROW_COLORS[row % ROW_COLORS.length],
+          alive: true
+        })
+      }
+    }
+    return bricks
+  }
+
+  function newState(level) {
+    const startLevel = level || 1
+    return {
+      phase: 'ready',
+      score: 0,
+      lives: 3,
+      level: startLevel,
+      paddle: (W - PADDLE_W) / 2,
+      ball: { x: W / 2, y: PADDLE_Y - R, vx: 0, vy: 0 },
+      bricks: buildBricks(),
+      notice: ''
+    }
+  }
+
+  // Serve from wherever the paddle currently is; a hit near the edge leaves at
+  // an angle rather than straight up.
+  function launch(s) {
+    const speed = 2.7 + Math.min(1, (s.level - 1) * 0.25)
+    const rel = clamp((s.ball.x - (s.paddle + PADDLE_W / 2)) / (PADDLE_W / 2), -1, 1)
+    const angle = rel * 0.7
+    return Object.assign({}, s, {
+      phase: 'playing',
+      ball: { x: s.ball.x, y: s.ball.y, vx: Math.sin(angle) * speed, vy: -Math.cos(angle) * speed },
+      notice: ''
+    })
+  }
+
+  function readyAt(s, paddle) {
+    return Object.assign({}, s, {
+      phase: 'ready',
+      paddle,
+      ball: { x: paddle + PADDLE_W / 2, y: PADDLE_Y - R, vx: 0, vy: 0 },
+      notice: ''
+    })
+  }
+
+  function step(s, keys) {
+    if (s.phase !== 'ready' && s.phase !== 'playing') return s
+
+    let paddle = s.paddle
+    if (keys.left) paddle -= 4.6
+    if (keys.right) paddle += 4.6
+    paddle = clamp(paddle, 0, W - PADDLE_W)
+
+    if (s.phase === 'ready') {
+      return Object.assign({}, s, {
+        paddle,
+        ball: { x: paddle + PADDLE_W / 2, y: PADDLE_Y - R, vx: 0, vy: 0 }
+      })
+    }
+
+    let { x, y, vx, vy } = s.ball
+    const prevY = y
+    x += vx
+    y += vy
+
+    if (x < R) { x = R; vx = Math.abs(vx) }
+    else if (x > W - R) { x = W - R; vx = -Math.abs(vx) }
+    if (y < R) { y = R; vy = Math.abs(vy) }
+
+    // Paddle: bounce with an angle taken from the hit offset, then keep a
+    // bounded speed so long rallies stay controllable.
+    if (vy > 0 && y + R >= PADDLE_Y && y + R <= PADDLE_Y + PADDLE_H + R && x >= paddle - R && x <= paddle + PADDLE_W + R) {
+      const speed = Math.min(6, Math.hypot(vx, vy) * 1.02)
+      const rel = clamp((x - (paddle + PADDLE_W / 2)) / (PADDLE_W / 2), -1, 1)
+      const angle = rel * 0.9
+      vx = Math.sin(angle) * speed
+      vy = -Math.cos(angle) * speed
+      y = PADDLE_Y - R
+    }
+
+    // One brick bounce per tick: pick the first overlap and decide the axis from
+    // where the ball was on the previous frame.
+    let bricks = s.bricks
+    let score = s.score
+    let hit = false
+    for (let i = 0; i < bricks.length; i++) {
+      const b = bricks[i]
+      if (!b.alive) continue
+      if (x + R < b.x || x - R > b.x + BRICK_W || y + R < b.y || y - R > b.y + BRICK_H) continue
+      bricks = bricks.slice()
+      bricks[i] = Object.assign({}, b, { alive: false })
+      score += 10
+      if (prevY + R <= b.y || prevY - R >= b.y + BRICK_H) vy = -vy
+      else vx = -vx
+      hit = true
+      break
+    }
+    if (hit) {
+      const speed = Math.min(6, Math.hypot(vx, vy) * 1.012)
+      const norm = Math.hypot(vx, vy) || 1
+      vx = (vx / norm) * speed
+      vy = (vy / norm) * speed
+    }
+
+    // Cleared the wall: bonus, next level, same score and lives.
+    if (hit && bricks.every(b => !b.alive)) {
+      const level = s.level + 1
+      return Object.assign(readyAt(s, paddle), {
+        level,
+        score: score + 50 * s.level,
+        bricks: buildBricks(),
+        notice: '第 ' + level + ' 关'
+      })
+    }
+
+    // Lost the ball.
+    if (y - R > H) {
+      const lives = s.lives - 1
+      if (lives <= 0) {
+        return Object.assign({}, s, { phase: 'over', paddle, bricks, score, ball: { x, y, vx, vy } })
+      }
+      return Object.assign(readyAt(s, paddle), { lives, score, bricks })
+    }
+
+    return Object.assign({}, s, { paddle, bricks, score, ball: { x, y, vx, vy } })
+  }
+
+  function View(props) {
+    const timer = props.timer
+    const th = props.th
+    const active = props.active
+    const onGameOver = props.onGameOver
+    const [s, setS] = React.useState(() => newState(1))
+    const keys = React.useRef({ left: false, right: false })
+    const prevOver = React.useRef(false)
+
+    React.useEffect(() => {
+      if (!active || (s.phase !== 'ready' && s.phase !== 'playing')) return
+      return timer.interval(() => setS(st => step(st, keys.current)), 16)
+    }, [active, s.phase])
+
+    React.useEffect(() => {
+      if (!active) return
+      const w = typeof window !== 'undefined' ? window : null
+      if (!w) return
+      const typing = (target) => {
+        const tag = target && target.tagName ? String(target.tagName).toUpperCase() : ''
+        return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)
+      }
+      const onKeyDown = (e) => {
+        if (typing(e.target)) return
+        const k = e.key
+        if (k === 'ArrowLeft' || k === 'a' || k === 'A') { keys.current.left = true; e.preventDefault() }
+        else if (k === 'ArrowRight' || k === 'd' || k === 'D') { keys.current.right = true; e.preventDefault() }
+        else if (k === ' ' || k === 'Spacebar' || k === 'p' || k === 'P') {
+          e.preventDefault()
+          setS(st => st.phase === 'ready'
+            ? launch(st)
+            : st.phase === 'playing'
+              ? Object.assign({}, st, { phase: 'paused' })
+              : st.phase === 'paused'
+                ? Object.assign({}, st, { phase: 'playing' })
+                : st)
+        }
+      }
+      const onKeyUp = (e) => {
+        const k = e.key
+        if (k === 'ArrowLeft' || k === 'a' || k === 'A') keys.current.left = false
+        else if (k === 'ArrowRight' || k === 'd' || k === 'D') keys.current.right = false
+      }
+      const onBlur = () => { keys.current.left = false; keys.current.right = false }
+      w.addEventListener('keydown', onKeyDown)
+      w.addEventListener('keyup', onKeyUp)
+      w.addEventListener('blur', onBlur)
+      return () => {
+        w.removeEventListener('keydown', onKeyDown)
+        w.removeEventListener('keyup', onKeyUp)
+        w.removeEventListener('blur', onBlur)
+      }
+    }, [active])
+
+    React.useEffect(() => {
+      if (s.phase === 'over' && !prevOver.current) {
+        onGameOver({ value: s.score, meta: '第 ' + s.level + ' 关' })
+      }
+      prevOver.current = s.phase === 'over'
+    }, [s.phase])
+
+    const bricks = s.bricks.map((b, i) => b.alive ? el('div', {
+      key: i,
+      style: {
+        position: 'absolute', left: b.x, top: b.y, width: BRICK_W, height: BRICK_H,
+        background: b.color, borderRadius: 2, opacity: .9
+      }
+    }) : null)
+
+    const board = el('div', {
+      style: {
+        position: 'relative', width: W, height: H, overflow: 'hidden',
+        border: '1px solid ' + th.boardBorder, borderRadius: 8, background: th.cellEmpty
+      }
+    },
+      bricks,
+      el('div', {
+        style: {
+          position: 'absolute', left: s.ball.x - R, top: s.ball.y - R, width: R * 2, height: R * 2,
+          borderRadius: '50%', background: th.text
+        }
+      }),
+      el('div', {
+        style: {
+          position: 'absolute', left: s.paddle, top: PADDLE_Y, width: PADDLE_W, height: PADDLE_H,
+          borderRadius: 4, background: th.overBtnBg
+        }
+      }),
+      s.phase === 'ready'
+        ? el('div', { style: { position: 'absolute', left: 0, right: 0, bottom: 30, textAlign: 'center', fontSize: 12, color: th.sub } }, '空格 / 点击发球')
+        : null,
+      s.phase === 'paused' ? el('div', {
+        style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: th.overBg, color: th.overText, fontSize: 18, fontWeight: 700 }
+      }, '已暂停') : null,
+      s.phase === 'over' ? el('div', {
+        style: { position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: th.overBg, color: th.overText, gap: 8 }
+      },
+        el('div', { style: { fontSize: 20, fontWeight: 700 } }, '游戏结束'),
+        el('div', { style: { fontSize: 14 } }, '得分 ' + s.score),
+        el('div', { style: { display: 'flex', gap: 4 } },
+          el('button', {
+            onMouseDown: noFocus, onClick: () => setS(newState(1)),
+            style: { cursor: 'pointer', padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: 14, background: th.overBtnBg, color: th.overBtnText }
+          }, '再来一局'),
+          el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, style: btnStyle(th) }, '🏆 排行')
+        )
+      ) : null
+    )
+
+    const statStyle = { fontSize: 12, margin: '2px 0', color: th.sub }
+    const statRow = el('div', { style: { display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 6, whiteSpace: 'nowrap' } },
+      el('span', { style: { fontSize: 20, fontWeight: 700 } }, String(s.score)),
+      el('span', { style: statStyle }, '❤️'.repeat(Math.max(0, s.lives)) + '♡'.repeat(Math.max(0, 3 - s.lives))),
+      el('span', { style: statStyle }, '第 ' + s.level + ' 关'),
+      s.notice ? el('span', { style: statStyle }, s.notice) : null
+    )
+
+    const btn = (label, fn, title) => el('button', { onMouseDown: noFocus, onClick: fn, title, style: btnStyle(th) }, label)
+
+    const controls = el('div', { style: { marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 2 } },
+      btn('‹', () => { keys.current.left = true; setTimeout(() => { keys.current.left = false }, 90) }, '左移'),
+      btn('›', () => { keys.current.right = true; setTimeout(() => { keys.current.right = false }, 90) }, '右移'),
+      btn('发球', () => setS(st => st.phase === 'ready' ? launch(st) : st), '发球（空格）'),
+      btn(s.phase === 'paused' ? '▶' : 'Ⅱ', () => setS(st => st.phase === 'playing' ? Object.assign({}, st, { phase: 'paused' }) : st.phase === 'paused' ? Object.assign({}, st, { phase: 'playing' }) : st), '暂停/继续（P）'),
+      btn('↺', () => setS(newState(1)), '重新开始'),
+      el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, title: '排行榜', style: btnStyle(th) }, '🏆')
+    )
+
+    return el('div', null, statRow, board, controls,
+      el('div', { style: { fontSize: 11, opacity: .55, marginTop: 6, lineHeight: 1.5 } }, '← → 移动挡板 · 空格发球 / 暂停'))
+  }
+
+  return {
+    id: 'breakout',
+    title: '打砖块',
+    icon: '🧱',
+    short: '砖块',
+    scoreOrder: 'desc',
+    View
+  }
+})()
+
+
+// ── src/games/gomoku.js ──
+// 🀄 Gomoku — game module for the mini-games framework.
+//
+// 13×13 DOM board. The player always holds black and moves first; white is a
+// heuristic opponent that weighs its own threats against the player's. A win is
+// scored by elapsed seconds (lower is better), so the leaderboard reads as the
+// fastest wins.
+const GOMOKU = (() => {
+  const N = 13
+  const CELL = 22
+  const EMPTY = 0
+  const BLACK = 1
+  const WHITE = 2
+  const DIRECTIONS = [[1, 0], [0, 1], [1, 1], [1, -1]]
+  const STARS = {}
+  ;[[3, 3], [3, 9], [9, 3], [9, 9], [6, 6]].forEach(([x, y]) => { STARS[y * N + x] = true })
+
+  const inBounds = (x, y) => x >= 0 && x < N && y >= 0 && y < N
+
+  function emptyBoard() { return new Array(N * N).fill(EMPTY) }
+
+  function newState() {
+    return { board: emptyBoard(), phase: 'playing', elapsed: 0, moves: [], last: -1 }
+  }
+
+  // Five or more contiguous stones through `idx` for `player`?
+  function fiveAt(board, idx, player) {
+    const x = idx % N
+    const y = (idx - x) / N
+    for (const [dx, dy] of DIRECTIONS) {
+      let count = 1
+      for (const sign of [1, -1]) {
+        let k = 1
+        while (true) {
+          const nx = x + dx * k * sign
+          const ny = y + dy * k * sign
+          if (!inBounds(nx, ny) || board[ny * N + nx] !== player) break
+          count++
+          k++
+        }
+      }
+      if (count >= 5) return true
+    }
+    return false
+  }
+
+  // How valuable `player` would find the empty point (x, y): per direction, the
+  // run length it would join and whether the run is open on each side.
+  function lineScore(board, x, y, player, dx, dy) {
+    let total = 1
+    let openA = 0
+    let openB = 0
+    let k = 1
+    while (true) {
+      const nx = x + dx * k
+      const ny = y + dy * k
+      if (!inBounds(nx, ny)) break
+      const v = board[ny * N + nx]
+      if (v === player) { total++; k++ } else { if (v === EMPTY) openA = 1; break }
+    }
+    k = 1
+    while (true) {
+      const nx = x - dx * k
+      const ny = y - dy * k
+      if (!inBounds(nx, ny)) break
+      const v = board[ny * N + nx]
+      if (v === player) { total++; k++ } else { if (v === EMPTY) openB = 1; break }
+    }
+    const open = openA + openB
+    if (total >= 5) return 10000000
+    if (total === 4) return open === 2 ? 1000000 : (open === 1 ? 10000 : 0)
+    if (total === 3) return open === 2 ? 5000 : (open === 1 ? 200 : 0)
+    if (total === 2) return open === 2 ? 120 : (open === 1 ? 10 : 0)
+    return open === 2 ? 5 : 1
+  }
+
+  function pointScore(board, idx, player) {
+    const x = idx % N
+    const y = (idx - x) / N
+    let score = 0
+    for (const [dx, dy] of DIRECTIONS) score += lineScore(board, x, y, player, dx, dy)
+    // Mild centre preference: an empty corner is worth less than an empty middle.
+    return score + 4 - Math.abs(x - 6) - Math.abs(y - 6)
+  }
+
+  function chooseAiMove(board) {
+    let best = -1
+    let bestScore = -Infinity
+    for (let i = 0; i < board.length; i++) {
+      if (board[i] !== EMPTY) continue
+      // Attack slightly ahead of defence so an own five is taken over a block,
+      // while a live four is still answered.
+      const score = pointScore(board, i, WHITE) * 1.08 + pointScore(board, i, BLACK) + Math.random() * 3
+      if (score > bestScore) { bestScore = score; best = i }
+    }
+    return best
+  }
+
+  function afterMove(s, board, moves, idx, player) {
+    if (fiveAt(board, idx, player)) {
+      return Object.assign({}, s, {
+        board, moves, last: idx, phase: player === BLACK ? 'won' : 'lost'
+      })
+    }
+    if (board.every(v => v !== EMPTY)) {
+      return Object.assign({}, s, { board, moves, last: idx, phase: 'draw' })
+    }
+    return Object.assign({}, s, { board, moves, last: idx })
+  }
+
+  function place(s, idx) {
+    if (s.phase !== 'playing' || s.board[idx] !== EMPTY) return s
+    const board = s.board.slice()
+    board[idx] = BLACK
+    const moves = s.moves.concat(idx)
+    const afterPlayer = afterMove(s, board, moves, idx, BLACK)
+    if (afterPlayer.phase !== 'playing') return afterPlayer
+
+    const aiIdx = chooseAiMove(board)
+    if (aiIdx < 0) return Object.assign({}, afterPlayer, { phase: 'draw' })
+    const nextBoard = board.slice()
+    nextBoard[aiIdx] = WHITE
+    return afterMove(afterPlayer, nextBoard, moves.concat(aiIdx), aiIdx, WHITE)
+  }
+
+  function undo(s) {
+    if (s.phase !== 'playing' || s.moves.length < 2) return s
+    const moves = s.moves.slice(0, s.moves.length - 2)
+    const board = emptyBoard()
+    moves.forEach((m, i) => { board[m] = i % 2 === 0 ? BLACK : WHITE })
+    return Object.assign({}, s, { board, moves, last: moves.length ? moves[moves.length - 1] : -1 })
+  }
+
+  function View(props) {
+    const timer = props.timer
+    const th = props.th
+    const active = props.active
+    const onGameOver = props.onGameOver
+    const [s, setS] = React.useState(newState)
+    const prevPhase = React.useRef('playing')
+
+    React.useEffect(() => {
+      if (!active || s.phase !== 'playing') return
+      return timer.interval(() => {
+        setS(st => st.phase === 'playing' ? Object.assign({}, st, { elapsed: st.elapsed + 1 }) : st)
+      }, 1000)
+    }, [active, s.phase])
+
+    React.useEffect(() => {
+      if (s.phase === 'won' && prevPhase.current !== 'won') {
+        onGameOver({ value: s.elapsed, meta: '执黑 · ' + s.moves.length + ' 手' })
+      }
+      prevPhase.current = s.phase
+    }, [s.phase])
+
+    const cells = []
+    for (let i = 0; i < s.board.length; i++) {
+      const v = s.board[i]
+      const isLast = s.last === i
+      cells.push(el('div', {
+        key: i,
+        onClick: () => setS(st => place(st, i)),
+        title: v === EMPTY ? '落子' : (v === BLACK ? '你的黑子' : '对手的白子'),
+        style: {
+          width: CELL, height: CELL, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: 'inset -1px -1px 0 ' + th.boardBorder,
+          cursor: v === EMPTY && s.phase === 'playing' ? 'pointer' : 'default'
+        }
+      },
+        v === EMPTY
+          ? (STARS[i] ? el('div', { style: { width: 4, height: 4, borderRadius: '50%', background: th.sub, opacity: .55 } }) : null)
+          : el('div', {
+            style: {
+              width: CELL - 5, height: CELL - 5, borderRadius: '50%',
+              background: v === BLACK ? '#0f172a' : '#f8fafc',
+              border: '1px solid ' + (v === BLACK ? 'rgba(248,250,252,.35)' : 'rgba(15,23,42,.35)'),
+              boxShadow: isLast ? '0 0 0 2px ' + (v === BLACK ? '#38bdf8' : '#f59e0b') : 'none'
+            }
+          })
+      ))
+    }
+
+    const rows = []
+    for (let r = 0; r < N; r++) {
+      rows.push(el('div', { key: r, style: { display: 'flex' } }, cells.slice(r * N, r * N + N)))
+    }
+
+    const statStyle = { fontSize: 12, margin: '2px 0', color: th.sub }
+    const btn = (label, fn, title) => el('button', { onMouseDown: noFocus, onClick: fn, title, style: btnStyle(th) }, label)
+
+    const panel = el('div', { style: { marginTop: 8 } },
+      el('div', { style: { display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 6 } },
+        el('span', { style: { fontSize: 20, fontWeight: 700 } }, s.elapsed + 's'),
+        el('span', { style: statStyle }, s.moves.length + ' 手'),
+        el('span', { style: statStyle }, '你执黑 · 先手')
+      ),
+      btn('悔棋', () => setS(undo), '撤销一回合'),
+      btn('↺ 新局', () => setS(newState()), '重新开始'),
+      el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, title: '排行榜', style: btnStyle(th) }, '🏆')
+    )
+
+    const over = s.phase === 'playing' ? null : el('div', {
+      style: {
+        position: 'absolute', inset: 0, zIndex: 5, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: th.overBg,
+        borderRadius: 8, color: th.overText, padding: 14, gap: 8
+      }
+    },
+      el('div', { style: { fontSize: 20, fontWeight: 700 } },
+        s.phase === 'won' ? '五子连珠！' : s.phase === 'lost' ? '白棋连成五子' : '棋盘已满'),
+      el('div', { style: { fontSize: 14 } }, '用时 ' + s.elapsed + ' 秒 · ' + s.moves.length + ' 手'),
+      el('div', { style: { display: 'flex', gap: 4 } },
+        el('button', {
+          onMouseDown: noFocus, onClick: () => setS(newState()),
+          style: { cursor: 'pointer', padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: 14, background: th.overBtnBg, color: th.overBtnText }
+        }, '再来一局'),
+        el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, style: btnStyle(th) }, '🏆 排行')
+      )
+    )
+
+    return el('div', { style: { position: 'relative' } },
+      el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+        el('div', {
+          style: {
+            padding: 5, border: '1px solid ' + th.boardBorder, borderRadius: 8,
+            background: th.boardBg, display: 'flex', flexDirection: 'column'
+          }
+        }, rows)
+      ),
+      panel,
+      over
+    )
+  }
+
+  return {
+    id: 'gomoku',
+    title: '五子棋',
+    icon: '🀄',
+    short: '五子',
+    scoreOrder: 'asc',
+    View
+  }
+})()
+
+
+// ── src/games/memory.js ──
+// 🃏 Memory — game module for the mini-games framework.
+//
+// 5×4 board of face-down pairs. Two mismatched cards flip back after a beat; a
+// cleared board is scored by elapsed seconds (lower is better) with the number
+// of pair attempts kept in the record's meta.
+const MEMORY = (() => {
+  const COLS = 5
+  const ROWS = 4
+  const CARD = 52
+  const FACES = ['🍎', '🍇', '🍋', '🍉', '🍓', '🥑', '🍒', '🍑', '🌽', '🍄']
+
+  function newState() {
+    const deck = []
+    FACES.forEach((face, k) => { deck.push({ k, face }); deck.push({ k, face }) })
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const swap = deck[i]
+      deck[i] = deck[j]
+      deck[j] = swap
+    }
+    return {
+      cards: deck.map(c => ({ k: c.k, face: c.face, up: false, matched: false })),
+      open: [],
+      moves: 0,
+      elapsed: 0,
+      phase: 'playing',
+      locked: false
+    }
+  }
+
+  function flip(s, idx) {
+    if (s.phase !== 'playing' || s.locked) return s
+    const card = s.cards[idx]
+    if (!card || card.up || card.matched) return s
+
+    const cards = s.cards.slice()
+    cards[idx] = Object.assign({}, card, { up: true })
+    const open = s.open.concat(idx)
+
+    if (open.length < 2) return Object.assign({}, s, { cards, open })
+
+    const moves = s.moves + 1
+    const [a, b] = open
+    if (cards[a].k === cards[b].k) {
+      cards[a] = Object.assign({}, cards[a], { matched: true })
+      cards[b] = Object.assign({}, cards[b], { matched: true })
+      const cleared = cards.every(c => c.matched)
+      return Object.assign({}, s, { cards, open: [], moves, phase: cleared ? 'won' : 'playing' })
+    }
+    // Keep both faces visible until the caller's timer flips them back.
+    return Object.assign({}, s, { cards, open, moves, locked: true })
+  }
+
+  function closePair(s) {
+    if (!s.locked) return s
+    const cards = s.cards.map(c => (c.matched || !c.up ? c : Object.assign({}, c, { up: false })))
+    return Object.assign({}, s, { cards, open: [], locked: false })
+  }
+
+  function View(props) {
+    const timer = props.timer
+    const th = props.th
+    const active = props.active
+    const onGameOver = props.onGameOver
+    const [s, setS] = React.useState(newState)
+    const prevPhase = React.useRef('playing')
+
+    React.useEffect(() => {
+      if (!active || s.phase !== 'playing') return
+      return timer.interval(() => {
+        setS(st => st.phase === 'playing' ? Object.assign({}, st, { elapsed: st.elapsed + 1 }) : st)
+      }, 1000)
+    }, [active, s.phase])
+
+    // Flip a mismatched pair back after a short beat; the cleanup cancels the
+    // pending flip when the component unmounts or another pair is opened.
+    React.useEffect(() => {
+      if (!s.locked) return
+      const w = typeof window !== 'undefined' ? window : null
+      if (!w) return
+      const id = w.setTimeout(() => setS(closePair), 650)
+      return () => w.clearTimeout(id)
+    }, [s.locked, s.open.length])
+
+    React.useEffect(() => {
+      if (s.phase === 'won' && prevPhase.current !== 'won') {
+        onGameOver({ value: s.elapsed, meta: '步数 ' + s.moves })
+      }
+      prevPhase.current = s.phase
+    }, [s.phase])
+
+    const cards = s.cards.map((c, i) => el('div', {
+      key: i,
+      onClick: () => setS(st => flip(st, i)),
+      title: c.matched ? '已配对' : (c.up ? c.face : '翻开'),
+      style: {
+        width: CARD, height: CARD, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 24, userSelect: 'none', borderRadius: 8, cursor: c.matched ? 'default' : 'pointer',
+        background: c.up || c.matched ? th.cellEmpty : th.btnBg,
+        border: '1px solid ' + (c.matched ? 'transparent' : th.btnBorder),
+        opacity: c.matched ? .45 : 1,
+        transition: 'background .12s, opacity .12s'
+      }
+    }, c.up || c.matched ? c.face : '?'))
+
+    const rows = []
+    for (let r = 0; r < ROWS; r++) {
+      rows.push(el('div', { key: r, style: { display: 'flex', gap: 6, marginBottom: 6 } }, cards.slice(r * COLS, r * COLS + COLS)))
+    }
+
+    const statStyle = { fontSize: 12, margin: '2px 0', color: th.sub }
+    const btn = (label, fn, title) => el('button', { onMouseDown: noFocus, onClick: fn, title, style: btnStyle(th) }, label)
+
+    const matched = s.cards.filter(c => c.matched).length / 2
+    const panel = el('div', { style: { marginTop: 6 } },
+      el('div', { style: { display: 'flex', gap: 10, alignItems: 'baseline', marginBottom: 6 } },
+        el('span', { style: { fontSize: 20, fontWeight: 700 } }, s.elapsed + 's'),
+        el('span', { style: statStyle }, s.moves + ' 步'),
+        el('span', { style: statStyle }, matched + '/' + FACES.length + ' 对')
+      ),
+      btn('↺ 新局', () => setS(newState()), '重新开始'),
+      el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, title: '排行榜', style: btnStyle(th) }, '🏆')
+    )
+
+    const over = s.phase === 'won' ? el('div', {
+      style: {
+        position: 'absolute', inset: 0, zIndex: 5, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', background: th.overBg,
+        borderRadius: 8, color: th.overText, padding: 14, gap: 8
+      }
+    },
+      el('div', { style: { fontSize: 20, fontWeight: 700 } }, '全部配对！'),
+      el('div', { style: { fontSize: 14 } }, '用时 ' + s.elapsed + ' 秒 · ' + s.moves + ' 步'),
+      el('div', { style: { display: 'flex', gap: 4 } },
+        el('button', {
+          onMouseDown: noFocus, onClick: () => setS(newState()),
+          style: { cursor: 'pointer', padding: '6px 16px', borderRadius: 6, border: 'none', fontSize: 14, background: th.overBtnBg, color: th.overBtnText }
+        }, '再来一局'),
+        el('button', { onMouseDown: noFocus, onClick: props.onOpenRank, style: btnStyle(th) }, '🏆 排行')
+      )
+    ) : null
+
+    return el('div', { style: { position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' } },
+      rows,
+      panel,
+      over
+    )
+  }
+
+  return {
+    id: 'memory',
+    title: '记忆翻牌',
+    icon: '🃏',
+    short: '翻牌',
+    scoreOrder: 'asc',
+    View
+  }
+})()
+
+
 // ── src/client.js ──
 // Browser half entry: registers the launcher entry and the floating window,
 // and owns the game roster.
 
-const GAMES = [TETRIS, SNAKE, G2048, MINESWEEPER]
+const GAMES = [TETRIS, SNAKE, G2048, MINESWEEPER, BREAKOUT, GOMOKU, MEMORY]
 
 // Hard dependencies. `slots` seats our two registrations; `timer` supplies the
 // disposers the game boards run their clocks through.

@@ -28,7 +28,7 @@ const EXPECTED = [
 ]
 
 // ---------------------------------------------------------------- game modules
-const games = await Promise.all(['tetris', 'snake', 'g2048', 'minesweeper'].map(async (name) => {
+const games = await Promise.all(['tetris', 'snake', 'g2048', 'minesweeper', 'breakout', 'gomoku', 'memory'].map(async (name) => {
   const url = pathToFileURL(join(root, 'src/games', name + '.js')).href
   const m = await import(url)
   const key = Object.keys(m)[0]

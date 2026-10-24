@@ -1,7 +1,7 @@
 {
   "name": "dsh-mini-games-lee",
-  "version": "0.5.0",
-  "description": "Mini-games collection for the DeepSeek Harness Web GUI (dsh 0.2.x) — one draggable frosted-glass window with Tetris, Snake, 2048 and Minesweeper, light/dark themes and per-game local leaderboards. · DeepSeek Harness Web 端小游戏合集：俄罗斯方块 / 贪吃蛇 / 2048 / 扫雷，毛玻璃悬浮窗、深浅色主题、各游戏独立排行榜。",
+  "version": "0.6.0",
+  "description": "Mini-games collection for the DeepSeek Harness Web GUI (dsh 0.2.x) — one draggable frosted-glass window with seven games: Tetris, Snake, 2048, Minesweeper, Breakout, Gomoku and Memory, light/dark themes and per-game local leaderboards. · DeepSeek Harness Web 端小游戏合集：俄罗斯方块 / 贪吃蛇 / 2048 / 扫雷 / 打砖块 / 五子棋 / 记忆翻牌，毛玻璃悬浮窗、深浅色主题、各游戏独立排行榜。",
   "type": "module",
   "main": "dist/index.js",
   "license": "MIT",
@@ -17,7 +17,10 @@
     "tetris",
     "snake",
     "2048",
-    "minesweeper"
+    "minesweeper",
+    "breakout",
+    "gomoku",
+    "memory"
   ],
   "repository": {
     "type": "git",

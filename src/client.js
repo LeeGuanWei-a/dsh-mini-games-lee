@@ -6,8 +6,11 @@ import { TETRIS } from './games/tetris.js'
 import { SNAKE } from './games/snake.js'
 import { G2048 } from './games/g2048.js'
 import { MINESWEEPER } from './games/minesweeper.js'
+import { BREAKOUT } from './games/breakout.js'
+import { GOMOKU } from './games/gomoku.js'
+import { MEMORY } from './games/memory.js'
 
-const GAMES = [TETRIS, SNAKE, G2048, MINESWEEPER]
+const GAMES = [TETRIS, SNAKE, G2048, MINESWEEPER, BREAKOUT, GOMOKU, MEMORY]
 
 // Hard dependencies. `slots` seats our two registrations; `timer` supplies the
 // disposers the game boards run their clocks through.

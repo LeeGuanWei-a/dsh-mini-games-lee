@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Mini Games",
-    "description": "Tetris, Snake, 2048 and Minesweeper in one draggable frosted-glass window for the DeepSeek Harness Web GUI, with light/dark themes and per-game local leaderboards."
+    "description": "Seven games in one draggable frosted-glass window for the DeepSeek Harness Web GUI: Tetris, Snake, 2048, Minesweeper, Breakout, Gomoku and Memory, with light/dark themes and per-game local leaderboards."
   }
 }

@@ -24,6 +24,9 @@ export const MODULES = [
   'src/games/snake.js',
   'src/games/g2048.js',
   'src/games/minesweeper.js',
+  'src/games/breakout.js',
+  'src/games/gomoku.js',
+  'src/games/memory.js',
   'src/client.js'
 ]
 

@@ -93,15 +93,17 @@ export function MiniGamesWindow(props) {
   }, label)
 
   // ── game tabs ────────────────────────────────────────────────────────────
-  const tabs = el('div', { style: { display: 'flex', gap: 4, padding: '6px 8px 0' } },
+  // A fixed 4-column grid keeps seven tabs on two tidy rows inside the 340px
+  // window; a single nowrap flex row used to overflow it once the roster grew.
+  const tabs = el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 4, padding: '6px 8px 0' } },
     games.map(g => el('button', {
       key: g.id,
       onMouseDown: noFocus,
       onClick: () => { setMini(false); store.setGame(g.id) },
       title: g.title,
       style: {
-        cursor: 'pointer', flex: 1, padding: '4px 6px', borderRadius: 6, fontSize: 12,
-        color: 'inherit', whiteSpace: 'nowrap',
+        cursor: 'pointer', padding: '4px 2px', borderRadius: 6, fontSize: 12,
+        color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         border: '1px solid ' + (g.id === game.id ? th.btnBorder : 'transparent'),
         background: g.id === game.id ? th.btnBg : 'transparent',
         opacity: g.id === game.id ? 1 : 0.65
