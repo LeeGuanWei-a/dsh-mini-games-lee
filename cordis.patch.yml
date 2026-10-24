@@ -1,4 +1,4 @@
-# dsh-mini-games-lee — bundle patch
+# dsh-mini-games-lee — bundle patch (dsh 0.2.x)
 #
 # One row: the Loader mounts this package's Host half, and `dsh-client-modules`
 # reaches the browser half through this package's manifest — `dsh.client.platform`
@@ -21,9 +21,9 @@
 #     locale/*.json title and description are never read. The bare name is the
 #     precondition for all of them.
 #
-# This file was previously an empty `[]`, which passed the profile validator while
-# registering nothing: the plugin was reachable only by pasting
-# dist/cordis-plugin.code.txt into the model-driven `cordis_define` tool.
+# Unchanged in 0.2.1: the row schema, the bare-name requirement, and the way
+# `dsh.client` is discovered from the Loader row's package. Only the model-driven
+# `cordis_define` alternative disappeared, so this bundle is now the one path.
 
 - insert:
     - id: dsh-mini-games-lee

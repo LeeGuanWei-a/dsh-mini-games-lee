@@ -1260,22 +1260,26 @@ const inject = ['slots', 'timer']
 
 function apply(ctx) {
   // `ctx.get(name)` is a lifecycle verb, so it works both under the bundle
-  // Client Loader's own context and under the restricted facade the dynamic
-  // `cordis_define` half receives. Reading `ctx.slots` directly would only
-  // work in the first case.
+  // Client Loader's own context and under the restricted facade a dynamic
+  // runner hands a plugin. Reading `ctx.slots` directly would only work in the
+  // first case.
   const slots = ctx.get('slots')
   const timer = ctx.get('timer')
   if (slots === undefined || timer === undefined) return
   const store = makeStore()
 
   // The launcher sits in the Session header's right-aligned utilities row — the
-  // page's top-right corner. Two things make it the right seat:
-  //   - it is a `list` with replaceRisk "none", so a fresh id is ADDED beside the
-  //     shipped entries (open-in-app, session-log-download) instead of replacing
-  //     one. The sibling `conversation.session.header.corner` is a `single` with
-  //     replaceRisk "shadows-shipped-ui" and is already occupied, so registering
-  //     there would hide a shipped control.
-  //   - `order: 20` sorts it after the shipped entries, at the row's right edge.
+  // page's top-right corner. In the dsh 0.2.1 slot catalog this seat is:
+  //
+  //   conversation.session.header.utilities   kind: list, scope: session,
+  //                                           replaceRisk: none,
+  //                                           options: id (required), order, label
+  //
+  // A fresh id is ADDED beside the shipped entries (open-in-app,
+  // schedule-catalog, session-log-download) instead of replacing one. The
+  // sibling `conversation.session.header.corner` is a `single` and already
+  // occupied, so registering there would hide a shipped control.
+  // `order: 20` sorts it after the shipped entries, at the row's right edge.
   //
   // This slot is Session-scoped: on the blank/Hero screen there is no header and
   // therefore no launcher. The window itself lives in `shell.overlay`, which is
@@ -1285,8 +1289,10 @@ function apply(ctx) {
     () => el(LaunchButton, { store })
   )))
 
-  // `shell.overlay` is the frame-wide floating layer above every column, which
-  // is where a draggable game window belongs.
+  // `shell.overlay` is the frame-wide floating layer above every column
+  // (kind: list, scope: root in 0.2.1), which is where a draggable game window
+  // belongs. Filling it does not reserve layout space, so it never disturbs the
+  // three-column frame.
   ctx.effect(() => slots.inject('shell.overlay', () => slots.register(
     { name: 'shell.overlay', id: 'minigames-window', order: 10, label: '小游戏' },
     () => el(MiniGamesWindow, { store, games: GAMES, timer })

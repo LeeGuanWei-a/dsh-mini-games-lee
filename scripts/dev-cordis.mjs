@@ -11,8 +11,13 @@
 //   - window.__ModuleLoader__.load()  → captures the registration, runs the
 //                                       factory with react from the module table
 //   - ctx.get('slots' / 'timer')      → a two-slot registry plus real timers
-//   - sidebar.footer.action           → the strip at the sidebar foot
+//   - conversation.session.header.utilities → the strip at the sidebar foot
 //   - shell.overlay                   → the floating layer above the page
+//
+// The real host renders the launcher in the Session header's top-right corner;
+// on the blank/Hero screen that header does not exist, which is why the preview
+// parks the same registration in the sidebar foot instead. Nothing about the
+// plugin's own code differs.
 //
 // React and ReactDOM come from this package's own node_modules UMD builds, so
 // what renders here is the same code path the page runs.
@@ -69,11 +74,11 @@ const PAGE = `<!doctype html>
   <div id="sidebar">
     <h1>DeepSeek Harness（预览替身）</h1>
     <div class="spacer"></div>
-    <div id="sidebar-footer"><span class="label">设置</span><span id="slot-footer"></span></div>
+    <div id="sidebar-footer"><span class="label">会话工具区（替身）</span><span id="slot-footer"></span></div>
   </div>
   <div id="main">
     <h2>小游戏合集 · 预览</h2>
-    <p>这是 ${pkg.name} 浏览器半区的本地替身外壳：侧栏底部应出现 🎮 入口，页面中央应出现可拖动的毛玻璃游戏窗口。真实 DSH 中的槽位渲染与主题由宿主负责，这里只验证插件自身的注册与渲染。</p>
+    <p>这是 ${pkg.name} 浏览器半区的本地替身外壳：左下角工具条应出现 🎮 入口（真实宿主里它在会话标题栏右上角），页面中央应出现可拖动的毛玻璃游戏窗口。真实 DSH 中的槽位渲染与主题由宿主负责，这里只验证插件自身的注册与渲染。</p>
     <div id="boot-error"></div>
   </div>
 </div>
@@ -135,10 +140,18 @@ const PAGE = `<!doctype html>
     var byKey = {};
     registrations.forEach(function (r) { if (!byKey[r.options.name]) byKey[r.options.name] = []; byKey[r.options.name].push(r); });
 
+    // The preview has no Session header, so the header-utilities registration is
+    // shown in the sidebar strip; everything else mounts by its own slot name.
+    var surfaces = {
+      'slot-footer': ['slot-footer', 'conversation.session.header.utilities'],
+      'slot-overlay': ['slot-overlay', 'shell.overlay']
+    };
+
     function mount(hostId) {
       var host = document.getElementById(hostId);
       if (!host) return;
-      var entries = byKey[hostId] || [];
+      var keys = surfaces[hostId] || [hostId];
+      var entries = keys.reduce(function (all, key) { return all.concat(byKey[key] || []) }, []);
       var children = entries.map(function (r) {
         return React.createElement(Host, { key: r.options.id }, r.factory());
       });

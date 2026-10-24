@@ -1,7 +1,7 @@
 // inline.mjs — the one place that knows how src/ maps into a single scope.
 //
-// Both build-lib.mjs (ModuleLoader browser half) and render-check.mjs (real
-// React render test) consume this, so they can never drift apart.
+// build-cordis.mjs (the two shipped halves) and render-check.mjs (real React
+// render test) consume this, so they can never drift apart.
 //
 // Conventions accepted here:
 //   import ... from 'react'        -> dropped (caller provides React)

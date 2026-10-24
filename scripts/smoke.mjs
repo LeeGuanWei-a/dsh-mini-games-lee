@@ -1,4 +1,4 @@
-// smoke.mjs — offline sanity check for the built browser half.
+// smoke.mjs — offline sanity check for the built browser half and the manifest.
 //
 // The browser half is the artifact the Client Loader actually mounts, so this
 // test loads dist/client.js exactly the way the page does: a fake
@@ -7,9 +7,12 @@
 // the returned plugin is driven through apply(ctx) with fake slots/timer
 // services. That is the whole load path short of a real browser.
 //
+// The tail of the file checks the bundle manifest `plugin_manager` reads:
+// dsh.bundle.patch, dsh.client, exports["./client"], icon and locale metadata.
+//
 // Run: node scripts/smoke.mjs
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -112,5 +115,58 @@ const roster = (src.match(/const GAMES = \[(.*?)\]/s) || [])[1] || ''
 const rosterCount = roster.split(',').filter(s => s.trim()).length
 if (rosterCount !== games.length) fail(`roster has ${rosterCount} games but ${games.length} modules checked`)
 else ok(`roster contains ${rosterCount} games`)
+
+// ------------------------------------------------- bundle manifest (dsh 0.2.1)
+//
+// `plugin_manager` reads exactly these fields: dsh.bundle.patch for the layer,
+// dsh.client for the browser roster, exports["./client"] for the served bundle,
+// and icon + locale for the card. A plugin that passes the load path above can
+// still be un-installable if any of them drifts, so assert them here too.
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+
+if (pkg.name !== 'dsh-mini-games-lee') fail(`package name is ${pkg.name}`)
+if (pkg.main !== 'dist/index.js') fail(`main is ${pkg.main}, expected dist/index.js`)
+else if (!readFileSync(join(root, 'dist/index.js'), 'utf8').includes('export function apply')) {
+  fail('dist/index.js does not export apply')
+} else ok('host half: main -> dist/index.js exporting apply')
+
+if (pkg.dsh?.bundle?.patch !== './cordis.patch.yml') fail('dsh.bundle.patch is missing or moved')
+else {
+  const patch = readFileSync(join(root, 'cordis.patch.yml'), 'utf8')
+  const row = new RegExp(`-\\s+insert:\\s*\\n\\s+-\\s+id:\\s*${pkg.name}\\s*\\n\\s+name:\\s*${pkg.name}\\b`)
+  if (!row.test(patch)) fail(`cordis.patch.yml does not insert a row named ${pkg.name}`)
+  else ok(`bundle patch inserts row "${pkg.name}" by bare package name`)
+}
+
+const client = pkg.dsh?.client
+if (client?.platform !== 'web') fail(`dsh.client.platform is ${client?.platform}, expected "web"`)
+else if (client.immediately !== true) fail('dsh.client.immediately must be true for boot-time activation')
+else if (!Array.isArray(client.inject) || client.inject.length === 0) fail('dsh.client.inject must list the package rows we load after')
+else if (pkg.exports?.['./client']?.default !== './dist/client.js') fail('exports["./client"] must resolve to ./dist/client.js')
+else ok(`browser half: platform=web immediately=true inject=${client.inject.length} -> dist/client.js`)
+
+if (pkg.exports?.['./payload'] !== undefined) {
+  fail('exports["./payload"] is a leftover from the removed cordis_define path')
+}
+
+const releases = pkg.dsh?.compatibility?.dshReleases ?? {}
+if (!Object.prototype.hasOwnProperty.call(releases, '0.2.1-rc.2')) {
+  fail('dsh.compatibility.dshReleases no longer claims 0.2.1-rc.2')
+} else ok(`compatibility: ${Object.keys(releases).join(', ')}`)
+
+for (const lang of ['en', 'zh']) {
+  let dict
+  try { dict = JSON.parse(readFileSync(join(root, 'locale', `${lang}.json`), 'utf8')) } catch (err) {
+    fail(`locale/${lang}.json is unreadable: ${err.message}`)
+    continue
+  }
+  if (!dict.meta?.title || !dict.meta?.description) fail(`locale/${lang}.json must carry meta.title and meta.description`)
+  else ok(`locale/${lang}.json: "${dict.meta.title}"`)
+}
+
+const icon = join(root, 'icon.svg')
+if (!existsSync(icon)) fail('icon.svg is missing (Plugin Manager card icon)')
+else if (statSync(icon).size > 256 * 1024) fail('icon.svg exceeds the 256 KiB metadata limit')
+else ok('icon: icon.svg within the 256 KiB limit')
 
 console.log(process.exitCode ? '\nsmoke: FAILED' : '\nsmoke: all checks passed')
